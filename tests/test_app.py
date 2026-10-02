@@ -81,9 +81,15 @@ class AppLayoutTests(unittest.TestCase):
     def test_app_runs_without_errors(self):
         self.assertEqual(len(start_app().exception), 0)
 
-    def test_placeholder_banner_is_visible(self):
+    def test_banner_says_properties_are_real_and_brands_are_illustrative(self):
         banners = [w.value for w in start_app().warning]
-        self.assertTrue(any("PLACEHOLDER DATA" in text for text in banners))
+        banner = next((text for text in banners if "Real properties, illustrative brands" in text), None)
+        self.assertIsNotNone(banner, banners)
+        self.assertIn("as of 2 October 2026", banner)
+        self.assertIn("sourced or estimated", banner)
+        self.assertIn("illustrative categories, not real companies", banner)
+        self.assertIn("illustrative only, not real proposals", banner)
+        self.assertNotIn("PLACEHOLDER DATA", banner)
 
     def test_sections_appear_in_the_agreed_order(self):
         headers = [h.value for h in start_app().header if h.value not in ("Property", "Score weights")]
@@ -112,7 +118,7 @@ class AppLayoutTests(unittest.TestCase):
     def test_placeholder_is_hidden_from_displayed_names_but_the_banner_stays(self):
         at = start_app()
         self.assertNotIn("Placeholder", everything_displayed(at))
-        self.assertTrue(any("PLACEHOLDER DATA" in w.value for w in at.warning))
+        self.assertTrue(any("illustrative brands" in w.value for w in at.warning))
 
     def test_match_caption_is_the_agreed_wording(self):
         captions = [c.value for c in start_app().caption]
@@ -143,6 +149,72 @@ class AppLayoutTests(unittest.TestCase):
         self.assertEqual(list(breakdown["Factor"]), list(scoring.FACTOR_LABELS.values()))
         self.assertAlmostEqual(breakdown["Points"].sum(), float(at.metric[0].value), delta=0.3)
         self.assertGreaterEqual(len([m for m in at.markdown if " · match score" in m.value]), 3)
+
+
+def choose_property(at, property_id):
+    prop = next(p for p in load_properties() if p["id"] == property_id)
+    at.sidebar.selectbox[0].select(clean_name(prop["name"])).run()
+    return at
+
+
+@unittest.skipIf(AppTest is None, "Streamlit is not installed")
+class ConfidenceDisplayTests(unittest.TestCase):
+    def breakdown(self, at):
+        return at.dataframe[1].value.set_index("Factor")
+
+    def test_the_breakdown_has_a_confidence_column_next_to_each_figure(self):
+        table = self.breakdown(start_app())
+        self.assertEqual(list(table.columns), ["Figure", "Confidence", "Score (0-10)", "Weight", "Points"])
+        # Queen's: the audience is calculated, engagement calculated, income an estimate.
+        self.assertEqual(table.loc["Audience size", "Confidence"], "Calculated")
+        self.assertEqual(table.loc["Social engagement", "Confidence"], "Calculated")
+        self.assertEqual(table.loc["Purchasing power", "Confidence"], "Estimate")
+        self.assertEqual(table.loc["Broadcast exposure", "Confidence"], "Estimate")
+        self.assertEqual(table.loc["Prestige", "Confidence"], "Estimate")
+
+    def test_estimates_are_labelled_for_every_property(self):
+        for prop in load_properties():
+            table = self.breakdown(choose_property(start_app(), prop["id"]))
+            for factor_label, confidence in table["Confidence"].items():
+                self.assertIn(confidence.lower().split(" ")[0], ("published", "calculated", "estimate", "low"), (prop["id"], factor_label))
+            self.assertEqual(table.loc["Purchasing power", "Confidence"], "Estimate", prop["id"])
+
+    def test_an_unmeasurable_engagement_is_flagged_as_low_confidence_with_the_neutral_score(self):
+        table = self.breakdown(choose_property(start_app(), "P03"))  # Roehampton: no dedicated account
+        self.assertEqual(table.loc["Social engagement", "Confidence"], "Low confidence (neutral score used)")
+        self.assertEqual(table.loc["Social engagement", "Score (0-10)"], 5.0)
+        self.assertIn("Not measurable", table.loc["Social engagement", "Figure"])
+
+    def test_the_audience_figure_is_described_by_property_type(self):
+        self.assertEqual(self.breakdown(start_app()).loc["Audience size", "Figure"], "1.8 million people")
+        player = self.breakdown(choose_property(start_app(), "P05"))
+        self.assertEqual(player.loc["Audience size", "Figure"], "6,369 Instagram followers")
+
+    def test_the_broadcast_figure_shows_the_tier_and_the_rubric_wording(self):
+        table = self.breakdown(start_app())
+        self.assertEqual(table.loc["Broadcast exposure", "Figure"], "Tier 9: live free-to-air television")
+        self.assertEqual(table.loc["Broadcast exposure", "Score (0-10)"], 9.0)
+
+    def test_the_confidence_labels_are_explained(self):
+        captions = [c.value for c in start_app().caption]
+        self.assertTrue(any("Published" in c and "Calculated" in c and "Estimate" in c for c in captions))
+
+    def test_each_figures_source_is_listed_in_a_data_sources_panel(self):
+        at = start_app()
+        self.assertEqual([e.label for e in at.expander], ["Data sources (collected 2026-10-02)"])
+        sources = at.dataframe[2].value
+        self.assertEqual(
+            list(sources["Figure"]),
+            ["Audience size", "Social engagement", "Purchasing power", "Broadcast exposure", "Prestige",
+             "Audience age profile (used in matching)"],
+        )
+        self.assertIn("LTA 2025 figures", sources.iloc[0]["Source"])
+
+    def test_the_unresearched_age_profile_is_flagged_next_to_the_matches(self):
+        captions = [c.value for c in start_app().caption]
+        self.assertTrue(any("audience age profile" in c and "estimate" in c for c in captions))
+        sources = start_app().dataframe[2].value
+        self.assertEqual(sources.iloc[-1]["Confidence"], "Estimate")
 
 
 @unittest.skipIf(AppTest is None, "Streamlit is not installed")

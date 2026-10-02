@@ -12,7 +12,51 @@ This file records what we have agreed. Update it whenever a decision changes.
 - Data lives in CSV files you can edit yourself (see "Data files" below).
 - No web scraping and no paid APIs.
 - Pitch writing sits in its own function so AI-written pitches can replace it later.
-- All sample data is PLACEHOLDER data. Names are descriptive, not real.
+- All sample data was PLACEHOLDER data in version 1. Version 2 (below) replaced the properties
+  with real researched data; the brands are still illustrative placeholders.
+
+## Version 2: real properties (data collected 2 October 2026)
+
+The five placeholder properties were replaced with real ones. Brands stay illustrative category
+placeholders, and pitches are illustrative only, not real proposals.
+
+| id | Property | Type |
+|---|---|---|
+| P01 | Queen's (HSBC Championships) | premium_tournament |
+| P02 | Lexus Ilkley Open | challenger_tournament |
+| P03 | Lexus British Open Roehampton (ITF J300) | junior_event |
+| P04 | Queen Mary Tennis Club (BUCS) | university_team |
+| P05 | Toby Samuel (ATP ranking 100 on 2 October 2026) | player |
+
+Model changes agreed for version 2:
+
+- **Media impressions replaced by `broadcast_tier`**, a 0-10 rating with a written rubric (live
+  free-to-air TV high, streaming only mid, none low). The tier is the factor's 0-10 score. The
+  factor is now labelled "Broadcast exposure". Rubric documented in the README and in
+  `BROADCAST_RUBRIC` in `scoring.py`.
+- **Audience definition:** events = attendance plus peak broadcast audience where published (each
+  row's `audience_source` says what it counts); players = Instagram followers.
+- **Engagement method:** median (likes + comments) of the 10 most recent non-pinned posts, divided by
+  followers. Median because viral posts distort a mean.
+- **Engagement rule:** if the rate is blank ("not measurable") or the account has under 1,000
+  followers, the factor gets a neutral score of 5 and is flagged "low confidence".
+- **Audience log scale:** bounds changed from 1,000-20 million to 100-10 million, because the real data
+  runs from 150 to 1.8 million and the old floor scored the 150-person club at exactly 0. New scores
+  for the real audiences span about 0.4 to 8.5 out of 10.
+- **New columns in `properties.csv`:** for each of the five figures a `_source`, `_source_url` and
+  `_confidence` (published / calculated / estimate), plus `date_collected`, `engagement_account`,
+  `engagement_followers`, and `age_profile_source` / `age_profile_confidence`. Source links are blank
+  where none was recorded (none were invented).
+- **category_fit:** financial_services for premium_tournament 8 to 9 (Queen's real title sponsor is a bank).
+- **Display:** a new banner (real properties, illustrative brands, figures as of 2 October 2026); a
+  confidence label next to each figure in the Analysis section; a collapsed "Data sources" panel; a
+  note that the audience age profiles are estimates; the pitch's disclaimer now says the brand is an
+  illustrative category and the pitch is not a real proposal.
+- **Not researched:** the audience age profiles. They are version 1 sample estimates, labelled
+  `estimate`, and brand matching depends on them. Researching them is the obvious next step.
+- **Confidence labels chosen by Claude, not given in the brief:** broadcast tiers and prestige ratings are
+  labelled `estimate` (a judgement against the rubric); the Queen's audience is `calculated` (a sum of
+  two published figures); the Ilkley audience and the Toby Samuel follower count are `published`.
 
 ## Market
 
@@ -24,22 +68,18 @@ This file records what we have agreed. Update it whenever a decision changes.
 
 | File | What it holds |
 |---|---|
-| `properties.csv` | The 5 sample properties and their raw numbers |
+| `properties.csv` | The 5 real properties (version 2): each figure with its source, link and confidence |
 | `brands.csv` | 13 placeholder brands, their category, target audience and whether they suit minors |
 | `category_fit.csv` | Category fit, scored 0-10, for each brand category x property type (editable by you) |
 | `activations.csv` | 2-3 activation ideas per brand category, used in the pitch |
 
-Each file starts with a `#` comment line saying it is placeholder data, and each
-row has an `is_placeholder` column (where relevant). The app will also show a
-visible placeholder banner.
+Each file starts with `#` comment lines, and each row has an `is_placeholder` column
+(`FALSE` for the real properties, `TRUE` for the illustrative brands). The app shows a banner
+saying which parts are real and which are illustrative.
 
-### Sample properties
+### Properties
 
-1. Premium ATP 500-level grass tournament, London
-2. ATP Challenger event, UK
-3. Rising British player, ranked around the top 150
-4. BUCS university tennis team
-5. ITF junior tournament (family and youth audience)
+See "Version 2" above. (Version 1 used five invented sample properties.)
 
 ### Property types (used by `category_fit.csv`)
 
@@ -59,21 +99,20 @@ Five factors, each scored 0-10 on a defined scale, then weighted.
 | Factor | Default weight | How it is scored |
 |---|---|---|
 | Audience size | 25 | Log scale, so small and large properties both get meaningful scores |
-| Engagement | 20 | Engagement rate mapped linearly to 0-10 |
+| Engagement | 20 | Engagement rate mapped linearly to 0-10; neutral 5 if not measurable |
 | Demographics | 20 | Purchasing power only: share of the audience in higher-income brackets |
-| Media exposure | 20 | Annual media impressions, log scale |
+| Broadcast exposure | 20 | The broadcast tier (0-10, from the rubric) |
 | Prestige | 15 | Your own 1-10 rating in the CSV |
 
-**What "audience" counts:** the estimated unique people reached per year, as a mix of
-in-person attendance, broadcast and streaming viewers, and digital or social reach, with
-each person counted once where possible (`annual_audience_reach` in `properties.csv`).
+**What "audience" counts (version 2):** for events, attendance plus peak broadcast audience where
+published (each row's `audience_source` says what it counts); for players, Instagram followers
+(`annual_audience_reach` in `properties.csv`).
 
 Scales (0 earns 0/10, the ceiling earns 10/10; set at the top of `scoring.py`):
-audience 1,000 to 20,000,000 (log); media impressions 100,000 to 500,000,000 (log);
-engagement 0% to 8% (straight line); higher-income share 0% to 50% (straight line);
-prestige is your 1-10 rating as it stands.
+audience 100 to 10,000,000 (log); engagement 0% to 8% (straight line); higher-income share
+0% to 50% (straight line); broadcast tier and prestige are 0-10 ratings used as they stand.
 
-- Prestige is weighted lower because it overlaps with audience and media exposure.
+- Prestige is weighted lower because it overlaps with audience and broadcast exposure.
 - Demographics does NOT include age. Age fit is handled in brand matching via
   audience overlap, so young or older audiences are not penalised in the score.
 - The interface has sliders for the weights, starting at the defaults above.
@@ -172,7 +211,7 @@ which brand the pitch is written for.
    banner always visible. Streamlit is installed in a private `.venv` folder inside the project.
    Run it with: `.venv/bin/streamlit run app.py` (from the `sponsorship_scout` folder).
 7. Final review: (done) all 5 properties run end to end through scoring, matching, pitch and
-   the app; the junior event excludes the age-restricted brand; 133 automated tests pass
+   the app; the junior event excludes the age-restricted brand; 182 automated tests pass (after version 2)
    (23 of them drive the app and need Streamlit); README written.
 
 ## Changes agreed after the first plan
@@ -230,6 +269,10 @@ which brand the pitch is written for.
     `.streamlit/config.toml` sets `runOnSave = true`, so saving a file reloads the open page
     automatically (tested: an edit to `pitch.py` appeared in the open page within 5 seconds).
 18. Git set up (branch `main`) with a first commit.
+19. Version 2: real researched properties, a broadcast tier instead of media impressions, median
+    engagement with a neutral score when it cannot be trusted, per-figure sources and confidence
+    labels, a new banner, and category-fit financial_services for premium_tournament 8 to 9. See
+    "Version 2" near the top of this file.
 
 ## Open items
 

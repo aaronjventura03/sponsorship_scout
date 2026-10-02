@@ -42,7 +42,7 @@ def make_property(ages, high_income=42, **changes):
         "annual_audience_reach": 12_000_000,
         "engagement_rate_pct": 4.5,
         "high_income_share_pct": high_income,
-        "annual_media_impressions": 250_000_000,
+        "broadcast_tier": 9,
         "is_placeholder": False,
     }
     for band, pct in zip(BANDS, ages):
@@ -137,10 +137,8 @@ class PitchLayoutTests(unittest.TestCase):
 
     def test_large_numbers_are_in_words(self):
         text = make_pitch()
-        self.assertIn("12 million people", text)
-        self.assertIn("250 million", text)
+        self.assertIn("Audience reach: 12 million people", text)
         self.assertNotIn("12,000,000", text)
-        self.assertNotIn("250,000,000", text)
 
     def test_no_internal_language_and_no_money(self):
         text = make_pitch()
@@ -152,9 +150,18 @@ class PitchLayoutTests(unittest.TestCase):
         self.assertEqual(internal_language_in("Commercial score: 80 / 100"), ["score", "/ 100"])
         self.assertEqual(internal_language_in("Branded scoreboard clocks"), [])
 
-    def test_placeholder_banner_only_for_placeholder_data(self):
+    def test_disclaimer_depends_on_what_is_real(self):
+        # Real property and real brand: no disclaimer at all.
         self.assertNotIn("placeholder data", make_pitch())
-        self.assertIn("placeholder data", make_pitch(prop=make_property(PROP_AGES, is_placeholder=True)))
+        self.assertNotIn("Illustrative draft", make_pitch())
+        # Placeholder property: the original warning.
+        sample_property = make_pitch(prop=make_property(PROP_AGES, is_placeholder=True))
+        self.assertIn("Draft built from placeholder data", sample_property)
+        # Real property but an illustrative brand category: says so, and that it is not a real proposal.
+        illustrative_brand = make_pitch(match=make_match(BRAND_AGES, is_placeholder=True))
+        self.assertIn("Illustrative draft. The brand shown is an example of its category, not a real company", illustrative_brand)
+        self.assertIn("not a real proposal", illustrative_brand)
+        self.assertNotIn("invented examples", illustrative_brand)
 
 
 class NamesAndSignoffTests(unittest.TestCase):
@@ -201,10 +208,35 @@ class StatsTests(unittest.TestCase):
         # It still appears once, in the benefits.
         self.assertEqual(text.count("higher-income"), 1)
 
-    def test_reach_and_media_are_always_listed(self):
-        stats = section(make_pitch(prop=make_property(PROP_AGES, engagement_rate_pct=0)), "## The property")
-        self.assertIn("Annual audience reach: 12 million people", stats)
-        self.assertIn("Media impressions per year: 250 million", stats)
+    def test_audience_reach_is_always_listed(self):
+        stats = section(make_pitch(prop=make_property(PROP_AGES, engagement_rate_pct=0, broadcast_tier=0)), "## The property")
+        self.assertIn("Audience reach: 12 million people", stats)
+
+    def test_a_players_audience_is_listed_as_instagram_followers(self):
+        prop = make_property(PROP_AGES, property_type="player", annual_audience_reach=6_369)
+        stats = section(make_pitch(prop=prop), "## The property")
+        self.assertIn("Instagram followers: 6,369", stats)
+        self.assertNotIn("Audience reach", stats)
+
+    def test_broadcast_coverage_is_shown_only_when_it_is_a_strength(self):
+        threshold = pitch.BROADCAST_MIN_TIER
+        strong = section(make_pitch(prop=make_property(PROP_AGES, broadcast_tier=threshold)), "## The property")
+        weak = section(make_pitch(prop=make_property(PROP_AGES, broadcast_tier=threshold - 1)), "## The property")
+        self.assertIn("Broadcast coverage: live streaming", strong)
+        self.assertNotIn("Broadcast coverage", weak)
+
+    def test_broadcast_coverage_uses_the_rubric_wording(self):
+        stats = section(make_pitch(prop=make_property(PROP_AGES, broadcast_tier=9)), "## The property")
+        self.assertIn("Broadcast coverage: live free-to-air television", stats)
+
+    def test_no_media_impressions_figure_remains(self):
+        self.assertNotIn("impressions", make_pitch().lower())
+
+    def test_unmeasurable_engagement_is_never_shown_or_praised(self):
+        for rate, followers in (("", ""), (9.0, 500)):  # no account, and an account under 1,000 followers
+            text = make_pitch(prop=make_property(PROP_AGES, engagement_rate_pct=rate, engagement_followers=followers))
+            self.assertNotIn("engagement rate", text, (rate, followers))
+            self.assertNotIn("highly engaged", text, (rate, followers))
 
 
 class BenefitTests(unittest.TestCase):
@@ -248,7 +280,12 @@ class BenefitTests(unittest.TestCase):
             match=make_match(BRAND_AGES, fit=1),
         )
         self.assertEqual(len(bullets_under_why(weak)), 2)
-        self.assertIn("Your brand would reach 12 million people a year.", weak)
+        self.assertIn("Your brand would reach 12 million people.", weak)
+
+    def test_reach_fallback_for_a_player_talks_about_followers(self):
+        prop = make_property(PROP_AGES, high_income=5, engagement_rate_pct=1, property_type="player", annual_audience_reach=6_369)
+        weak = make_pitch(prop=prop, match=make_match(BRAND_AGES, fit=1))
+        self.assertIn("Your brand would reach 6,369 followers.", weak)
 
 
 ENGAGEMENT_BULLET = "A highly engaged following, well above typical engagement rates."

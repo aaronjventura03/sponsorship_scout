@@ -7,7 +7,7 @@ Run from the sponsorship_scout folder with:
 from data_loader import load_properties
 from scoring import DEFAULT_WEIGHTS, FACTOR_LABELS, rank_properties
 
-print("PLACEHOLDER DATA: scores below use invented sample numbers.\n")
+print("Properties are real (sourced or estimated figures; see data/properties.csv for each figure's confidence).\n")
 print("Weights:", ", ".join(f"{FACTOR_LABELS[f]} {w}" for f, w in DEFAULT_WEIGHTS.items()))
 print("Each factor shows: score out of 10 -> points contributed\n")
 

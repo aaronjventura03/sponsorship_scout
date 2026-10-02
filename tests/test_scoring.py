@@ -18,15 +18,17 @@ import scoring
 from data_loader import load_properties
 
 
-def make_property(audience, engagement, income, media, prestige):
+def make_property(audience, engagement, income, broadcast_tier, prestige, **extra):
     """Build a fake property with just the fields scoring needs."""
-    return {
+    prop = {
         "annual_audience_reach": audience,
         "engagement_rate_pct": engagement,
         "high_income_share_pct": income,
-        "annual_media_impressions": media,
+        "broadcast_tier": broadcast_tier,
         "prestige_rating": prestige,
     }
+    prop.update(extra)
+    return prop
 
 
 # A property that hits the top of every scale, and one that hits the bottom.
@@ -34,10 +36,10 @@ BEST = make_property(
     scoring.AUDIENCE_CEILING,
     scoring.ENGAGEMENT_CEILING_PCT,
     scoring.HIGH_INCOME_CEILING_PCT,
-    scoring.MEDIA_CEILING,
+    10,
     10,
 )
-WORST = make_property(1, 0, 0, 1, 0)
+WORST = make_property(1, 0, 0, 0, 0)
 
 
 class ScaleTests(unittest.TestCase):
@@ -95,12 +97,12 @@ class ScoreTests(unittest.TestCase):
         self.assertAlmostEqual(scoring.score_property(WORST)["total"], 0)
 
     def test_breakdown_adds_up_to_total(self):
-        result = scoring.score_property(make_property(500_000, 4, 30, 5_000_000, 6))
+        result = scoring.score_property(make_property(500_000, 4, 30, 5, 6))
         points = sum(item["points"] for item in result["factors"].values())
         self.assertAlmostEqual(points, result["total"])
 
     def test_changing_weights_changes_score_but_stays_out_of_100(self):
-        prop = make_property(500_000, 8, 10, 1_000_000, 3)
+        prop = make_property(500_000, 8, 10, 3, 3)
         engagement_heavy = {"audience": 1, "engagement": 90, "demographics": 3, "media": 3, "prestige": 3}
         default_total = scoring.score_property(prop)["total"]
         heavy_total = scoring.score_property(prop, engagement_heavy)["total"]
@@ -110,17 +112,124 @@ class ScoreTests(unittest.TestCase):
         self.assertAlmostEqual(sum(weights_used), 100)
 
     def test_ranking_is_best_first(self):
-        small = make_property(10_000, 2, 10, 200_000, 2)
-        medium = make_property(500_000, 4, 25, 5_000_000, 5)
-        large = make_property(10_000_000, 4, 40, 200_000_000, 9)
+        small = make_property(10_000, 2, 10, 1, 2)
+        medium = make_property(500_000, 4, 25, 5, 5)
+        large = make_property(10_000_000, 4, 40, 9, 9)
         ranked = scoring.rank_properties([small, large, medium])
         self.assertEqual([pair[0] for pair in ranked], [large, medium, small])
 
     def test_age_does_not_affect_the_score(self):
         # Age lives in brand matching, not here.
-        young = {**make_property(500_000, 4, 30, 5_000_000, 6), "age_18_24_pct": 90}
-        older = {**make_property(500_000, 4, 30, 5_000_000, 6), "age_55plus_pct": 90}
+        young = {**make_property(500_000, 4, 30, 5, 6), "age_18_24_pct": 90}
+        older = {**make_property(500_000, 4, 30, 5, 6), "age_55plus_pct": 90}
         self.assertEqual(scoring.score_property(young)["total"], scoring.score_property(older)["total"])
+
+
+class BroadcastTests(unittest.TestCase):
+    def test_the_broadcast_tier_is_used_directly_as_the_score(self):
+        for tier in (0, 2, 5, 9, 10):
+            self.assertEqual(scoring.factor_scores(make_property(1000, 4, 30, tier, 5))["media"], tier)
+
+    def test_rubric_descriptions_follow_the_tiers(self):
+        self.assertEqual(scoring.broadcast_description(10), "live free-to-air television")
+        self.assertEqual(scoring.broadcast_description(9), "live free-to-air television")
+        self.assertEqual(scoring.broadcast_description(8), "live television and streaming")
+        self.assertEqual(scoring.broadcast_description(5), "live streaming")
+        self.assertEqual(scoring.broadcast_description(4), "live streaming")
+        self.assertEqual(scoring.broadcast_description(2), "limited streaming or highlights")
+        self.assertEqual(scoring.broadcast_description(1), "social media video only")
+        self.assertEqual(scoring.broadcast_description(0), "no broadcast or streaming coverage")
+
+    def test_free_to_air_rates_above_streaming_above_nothing(self):
+        free_to_air = scoring.broadcast_description(9)
+        streaming = scoring.broadcast_description(5)
+        self.assertIn("free-to-air", free_to_air)
+        self.assertIn("streaming", streaming)
+        self.assertNotIn("free-to-air", streaming)
+
+    def test_rubric_covers_every_tier_from_0_to_10(self):
+        for tier in range(11):
+            self.assertTrue(scoring.broadcast_description(tier))
+
+
+class EngagementRuleTests(unittest.TestCase):
+    def engagement_score(self, rate, followers):
+        prop = make_property(1000, rate, 30, 5, 5, engagement_followers=followers)
+        return scoring.factor_scores(prop)["engagement"]
+
+    def test_a_measurable_rate_is_scored_normally(self):
+        self.assertEqual(self.engagement_score(4, 5_000), 5)  # 4% of the 8% ceiling
+
+    def test_a_blank_rate_gets_the_neutral_score(self):
+        self.assertEqual(self.engagement_score("", ""), scoring.ENGAGEMENT_NEUTRAL_SCORE)
+        self.assertEqual(scoring.ENGAGEMENT_NEUTRAL_SCORE, 5)
+
+    def test_an_account_under_1000_followers_gets_the_neutral_score(self):
+        self.assertEqual(self.engagement_score(9, 999), scoring.ENGAGEMENT_NEUTRAL_SCORE)
+
+    def test_exactly_1000_followers_is_trusted(self):
+        self.assertEqual(self.engagement_score(4, 1_000), 5)
+        self.assertEqual(scoring.ENGAGEMENT_MIN_FOLLOWERS, 1_000)
+
+    def test_a_missing_follower_count_is_not_held_against_the_property(self):
+        prop = make_property(1000, 4, 30, 5, 5)  # no engagement_followers field at all
+        self.assertTrue(scoring.engagement_is_measurable(prop))
+
+    def test_the_neutral_score_is_flagged_as_low_confidence(self):
+        unmeasurable = make_property(1000, "", 30, 5, 5, engagement_followers="", engagement_confidence="estimate")
+        result = scoring.score_property(unmeasurable)["factors"]["engagement"]
+        self.assertEqual(result["score"], 5)
+        self.assertIn("low confidence", result["confidence"])
+
+    def test_a_measured_rate_keeps_its_confidence_label(self):
+        measured = make_property(1000, 3, 30, 5, 5, engagement_followers=5_000, engagement_confidence="calculated")
+        self.assertEqual(scoring.score_property(measured)["factors"]["engagement"]["confidence"], "calculated")
+
+
+class ConfidenceTests(unittest.TestCase):
+    def test_every_factor_reports_the_confidence_from_the_data(self):
+        prop = make_property(
+            1000, 3, 30, 5, 5,
+            engagement_followers=5_000,
+            audience_confidence="published",
+            engagement_confidence="calculated",
+            high_income_confidence="estimate",
+            broadcast_confidence="estimate",
+            prestige_confidence="estimate",
+        )
+        labels = {f: item["confidence"] for f, item in scoring.score_property(prop)["factors"].items()}
+        self.assertEqual(
+            labels,
+            {"audience": "published", "engagement": "calculated", "demographics": "estimate", "media": "estimate", "prestige": "estimate"},
+        )
+
+    def test_every_factor_has_a_confidence_column(self):
+        self.assertEqual(set(scoring.CONFIDENCE_COLUMN), set(scoring.FACTOR_LABELS))
+
+
+class AudienceScaleTests(unittest.TestCase):
+    """The audience scale was set for the real data, which runs from 150 to 1.8 million."""
+
+    REAL_AUDIENCES = {"club": 150, "junior event": 3_000, "player": 6_369, "challenger": 20_000, "premium": 1_848_000}
+
+    def score(self, audience):
+        return scoring.factor_scores(make_property(audience, 3, 30, 5, 5))["audience"]
+
+    def test_the_smallest_real_audience_still_scores_above_zero(self):
+        self.assertGreater(self.score(150), 0)
+
+    def test_the_largest_real_audience_leaves_headroom_below_ten(self):
+        self.assertLess(self.score(1_848_000), 9)
+
+    def test_real_audiences_stay_in_order_and_are_well_spread(self):
+        scores = [self.score(a) for a in sorted(self.REAL_AUDIENCES.values())]
+        self.assertEqual(scores, sorted(scores))
+        # Each is at least half a point apart, so no two properties look the same.
+        self.assertTrue(all(b - a > 0.5 for a, b in zip(scores, scores[1:])), scores)
+
+    def test_the_bounds_are_100_to_10_million(self):
+        self.assertEqual(scoring.AUDIENCE_FLOOR, 100)
+        self.assertEqual(scoring.AUDIENCE_CEILING, 10_000_000)
 
 
 class RankLabelTests(unittest.TestCase):

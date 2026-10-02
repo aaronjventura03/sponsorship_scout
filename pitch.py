@@ -15,6 +15,7 @@ matching or the data files has to change.
 
 from display import clean_name
 from matching import AGE_BANDS
+from scoring import broadcast_description, engagement_is_measurable
 
 # ===========================================================================
 # SIGN-OFF: who the pitch is from. Change these to change the last line of
@@ -70,6 +71,9 @@ CATEGORY_GOOD_FIT = 6        # category fit of 6 or more earns a "good setting" 
 CATEGORY_NATURAL_FIT = 8     # category fit of 8 or more earns a "natural home" benefit
 PURCHASING_POWER_MIN_PCT = 30  # mention purchasing power if at least this share is higher-income
 ENGAGEMENT_MIN_PCT = 4       # show the social media engagement rate only if it is at least this (it is a strength)
+BROADCAST_MIN_TIER = 4       # show the broadcast coverage line only if the broadcast tier is at least this
+# Property types whose "audience" is Instagram followers rather than people reached at an event.
+FOLLOWER_TYPES = {"player"}
 SIGNIFICANT_SHARE_PCT = 25   # a customer age group counts as "significant" at this share of the audience
 
 
@@ -144,8 +148,8 @@ def _benefits(prop, match):
     noun = PROPERTY_NOUN.get(prop["property_type"], prop["property_type"].replace("_", " "))
     candidates = [_audience_benefit(prop, brand, noun)]
 
-    # 2. Engagement: only when it is a strength.
-    if prop["engagement_rate_pct"] >= ENGAGEMENT_MIN_PCT:
+    # 2. Engagement: only when it could be measured and is a strength.
+    if engagement_is_measurable(prop) and prop["engagement_rate_pct"] >= ENGAGEMENT_MIN_PCT:
         candidates.append("A highly engaged following, well above typical engagement rates.")
 
     # 3. Category: is this a natural setting for the brand's kind of business?
@@ -172,7 +176,11 @@ def _benefits(prop, match):
 
     # Always give at least two benefits: fall back to reach.
     if len(benefits) < 2:
-        benefits.append(f"Your brand would reach {in_words(prop['annual_audience_reach'])} people a year.")
+        reach = in_words(prop["annual_audience_reach"])
+        if prop["property_type"] in FOLLOWER_TYPES:
+            benefits.append(f"Your brand would reach {reach} followers.")
+        else:
+            benefits.append(f"Your brand would reach {reach} people.")
 
     return benefits
 
@@ -196,8 +204,14 @@ def generate_pitch(prop, match, activations, max_activations=MAX_ACTIVATIONS):
     # --- 1. Headline -------------------------------------------------------
     lines.append(f"# Partnership opportunity: {property_name} × {brand_name}")
     lines.append("")
-    if prop.get("is_placeholder") or brand.get("is_placeholder"):
+    if prop.get("is_placeholder"):
         lines.append("> Draft built from placeholder data. All names and figures are invented examples.")
+        lines.append("")
+    elif brand.get("is_placeholder"):
+        lines.append(
+            "> Illustrative draft. The brand shown is an example of its category, not a real company, "
+            "and this is not a real proposal."
+        )
         lines.append("")
 
     # --- 2. The property ---------------------------------------------------
@@ -207,10 +221,14 @@ def generate_pitch(prop, match, activations, max_activations=MAX_ACTIVATIONS):
     lines.append("")
     # Only strengths are listed. The higher-income share is not repeated here
     # because it already appears in the "Why this brand" benefits.
-    lines.append(f"- Annual audience reach: {in_words(prop['annual_audience_reach'])} people")
-    if prop["engagement_rate_pct"] >= ENGAGEMENT_MIN_PCT:
+    if prop["property_type"] in FOLLOWER_TYPES:
+        lines.append(f"- Instagram followers: {in_words(prop['annual_audience_reach'])}")
+    else:
+        lines.append(f"- Audience reach: {in_words(prop['annual_audience_reach'])} people")
+    if engagement_is_measurable(prop) and prop["engagement_rate_pct"] >= ENGAGEMENT_MIN_PCT:
         lines.append(f"- Social media engagement rate: {prop['engagement_rate_pct']}%")
-    lines.append(f"- Media impressions per year: {in_words(prop['annual_media_impressions'])}")
+    if prop["broadcast_tier"] >= BROADCAST_MIN_TIER:
+        lines.append(f"- Broadcast coverage: {broadcast_description(prop['broadcast_tier'])}")
     lines.append("")
 
     # --- 3. Why this brand -------------------------------------------------

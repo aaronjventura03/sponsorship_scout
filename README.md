@@ -7,11 +7,14 @@ player) and Sponsorship Scout will:
 2. **Match** it with the best-fit brands from a brand list, and explain why each one fits.
 3. **Draft a one-page partnership pitch**, written for the brand to read, that you can download.
 
-> **All the data is placeholder data.** Every property, brand and number in this project is an
-> invented example, not real research. The app shows a warning banner for as long as the data
-> is marked as placeholder. Replace the CSV files with researched figures before relying on any result.
+> **What is real and what is not (version 2).**
+> The five **properties are real**, with sourced or estimated figures collected on 2 October 2026.
+> Every figure has a source and a confidence label (published, calculated or estimate), and the
+> app shows them. The **brands are illustrative categories**, not real companies, and the **pitches
+> are illustrative only**, not real proposals. The audience **age profiles** used in brand matching
+> are still unresearched estimates carried over from version 1.
 
-Version 1 uses no web scraping and no paid services. The data lives in four CSV files that you
+Version 2 uses no web scraping and no paid services. The data lives in four CSV files that you
 can edit in Excel, Numbers or any text editor.
 
 ---
@@ -46,7 +49,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ```
 
 All tests should say `OK`. Run them after editing any CSV file: they catch the easy mistakes
-(age columns that do not total 100, a category missing from another file, and so on).
+(age columns that do not total 100, a missing source, a category missing from another file, and so on).
+`tests/test_data.py` also pins the exact researched figures, so when you refresh the data with new
+research, update the `EXPECTED` table in `RealDataTests` to match.
 
 ---
 
@@ -56,8 +61,9 @@ All tests should say `OK`. Run them after editing any CSV file: they catch the e
   rescaled to total 100, so the score stays out of 100. "Reset to defaults" puts them back.
 - **Property ranking:** all properties ranked by score, with the chosen one tinted. It re-sorts
   live as you move the sliders.
-- **Analysis:** the chosen property's score breakdown, its top brand matches with reasons, and any
-  brands removed by the youth-audience rule. This is the internal view.
+- **Analysis:** the chosen property's score breakdown with a **confidence label next to each figure**,
+  a collapsed "Data sources" panel, its top brand matches with reasons, and any brands removed by the
+  youth-audience rule. This is the internal view.
 - **Pitch:** choose a brand (it defaults to the top match, but you must choose if two brands tie
   for first), read the pitch, and download it as a Markdown file.
 
@@ -66,25 +72,75 @@ All tests should say `OK`. Run them after editing any CSV file: they catch the e
 ## The data files (in `data/`)
 
 Open them in any spreadsheet or text editor. Lines starting with `#` at the top are notes and are
-ignored by the app. Leave `is_placeholder` as `TRUE` until a row holds real, researched data.
+ignored by the app.
 
 | File | One row per | What to edit |
 |---|---|---|
-| `properties.csv` | tennis property | audience, engagement, income share, media reach, prestige, age profile |
+| `properties.csv` | tennis property | the five figures, each with its source and confidence, plus the age profile |
 | `brands.csv` | brand | category, target customer age profile, whether it is age-restricted |
 | `category_fit.csv` | brand category | how well each category suits each property type (0 to 10) |
 | `activations.csv` | activation idea | ideas shown in the pitch, written to the brand ("your name") |
 
-**Things to know when editing**
+### The figures in `properties.csv`
 
-- The five age columns (`age_*_pct` and `target_age_*_pct`) must each total 100.
-- `annual_audience_reach` is the estimated unique people reached per year: in-person attendance,
-  broadcast and streaming viewers, and digital or social reach, with each person counted once where possible.
-- `audience_includes_minors` is `TRUE` for events with a youth audience. It switches on the youth
-  rules described below.
-- `suitable_for_minors` is `FALSE` only for age-restricted products (alcohol, gambling and similar).
-  Brands that merely do not target children stay `TRUE`.
-- **To add a property:** add a row to `properties.csv`. Its `property_type` must be a column in `category_fit.csv`.
+Each of the five figures has its own `_source`, `_source_url` and `_confidence` columns, and each row has a
+`date_collected`. Leave `_source_url` blank if you have no link. Do not invent one.
+
+| Figure | Column | How it is defined |
+|---|---|---|
+| Audience | `annual_audience_reach` | **Events:** attendance plus peak broadcast audience where published. Check `audience_source` for what each row counts (for example, Ilkley is attendance only because streaming is not published). **Players:** Instagram followers. |
+| Engagement | `engagement_rate_pct` | Median of (likes + comments) over the 10 most recent **non-pinned** posts, divided by followers (see below). Blank means "not measurable". |
+| Purchasing power | `high_income_share_pct` | % of the audience in higher-income brackets. All current values are estimates. |
+| Broadcast | `broadcast_tier` | A 0 to 10 rating from the rubric below. |
+| Prestige | `prestige_rating` | Your own 1 to 10 judgement. |
+
+**Confidence labels** (every figure has one):
+
+- **published**: taken straight from a published figure (for example, attendance from a tournament
+  programme, or a follower count).
+- **calculated**: worked out from published figures or posts (for example, a sum of attendance and a TV
+  audience, or a median engagement rate).
+- **estimate**: a judgement. Treat it with care.
+
+**Why the median for engagement.** One viral post can have many times the normal likes and comments. A mean
+(average) would be dragged up by it and overstate how engaged the following normally is. The median is the
+middle value of the 10 posts, so one outlier cannot move it much. Pinned posts are skipped because they stay
+at the top for weeks and collect more attention than a normal post.
+
+**When engagement is not trusted.** If the rate is blank ("not measurable", for example an event with no
+dedicated account) or the account has **under 1,000 followers** (`engagement_followers`), the score is a
+**neutral middle score of 5 out of 10** and the app flags it as low confidence. A tiny account's rate is too
+noisy to reward or punish. Both numbers are constants at the top of `scoring.py`.
+
+### The broadcast rubric
+
+`broadcast_tier` rates the coverage of the property's main matches. Free-to-air live TV is high, streaming
+only is in the middle, and no coverage is low. The tier is used directly as the 0 to 10 score.
+
+| Tier | Coverage | Example |
+|---|---|---|
+| 10 | Live free-to-air TV in several major markets | a Grand Slam |
+| 9 | Live free-to-air TV, most or all days | Queen's, shown by the BBC |
+| 7 to 8 | Live TV (free-to-air for part, or pay TV) plus full streaming | |
+| 4 to 6 | Live streaming only: 6 for a large official platform, 4 for one court or a small audience | Toby Samuel (5), Lexus Ilkley Open (4) |
+| 2 to 3 | Limited streaming or highlights | Roehampton junior event (2) |
+| 1 | Social media video clips only | |
+| 0 | No broadcast or streaming coverage | a university club's home matches |
+
+The words in the right-hand column of the rubric (for example "live free-to-air television") are the
+descriptions shown in the app and the pitch, and they live in `BROADCAST_RUBRIC` in `scoring.py`.
+For a player, rate the coverage their typical matches get.
+
+### Other things to know when editing
+
+- The five age columns (`age_*_pct` and `target_age_*_pct`) must each total 100. The property age profiles
+  have **not been researched**: they are version 1 sample estimates, labelled `estimate`, and brand matching
+  depends on them.
+- `audience_includes_minors` is `TRUE` for events with a youth audience. It switches on the youth rules below.
+- `suitable_for_minors` (in `brands.csv`) is `FALSE` only for age-restricted products (alcohol, gambling and
+  similar). Brands that merely do not target children stay `TRUE`.
+- **To add a property:** add a row to `properties.csv` with all the columns. Its `property_type` must be a
+  column in `category_fit.csv`.
 - **To add a brand category:** add a row to `category_fit.csv` (with a friendly `category_label`) and at
   least two rows to `activations.csv`, then use the same category name in `brands.csv`.
 - **To add a property type:** add a column to `category_fit.csv`, and a line to `PROPERTY_NOUN` in `pitch.py`.
@@ -100,10 +156,10 @@ ignored by the app. Leave `is_placeholder` as `TRUE` until a row holds real, res
 
 | Factor | Default weight | How it is scored |
 |---|---|---|
-| Audience size | 25 | log scale, 1,000 (0) to 20 million (10) |
-| Social engagement | 20 | straight line, 0% (0) to 8% (10) |
+| Audience size | 25 | log scale, 100 (0) to 10 million (10) |
+| Social engagement | 20 | straight line, 0% (0) to 8% (10); neutral 5 if not measurable or under 1,000 followers |
 | Purchasing power | 20 | straight line, 0% (0) to 50% (10) of the audience in higher-income brackets |
-| Media exposure | 20 | log scale, 100,000 (0) to 500 million (10) impressions |
+| Broadcast exposure | 20 | the broadcast tier (0 to 10) from the rubric |
 | Prestige | 15 | your own 1 to 10 rating |
 
 **Brand matching (`matching.py`).**
@@ -118,7 +174,8 @@ ignored by the app. Leave `is_placeholder` as `TRUE` until a row holds real, res
 **The pitch (`pitch.py`).** A fixed template with five sections: headline, the property, why the brand,
 activation ideas and next steps. "Why the brand" holds up to three benefits, chosen in this priority order:
 audience, engagement, category fit, purchasing power. The sign-off name and title, and every threshold, are
-named constants at the top of `pitch.py`.
+named constants at the top of `pitch.py`. It starts with a short disclaimer line saying the brand is an
+illustrative category and the pitch is not a real proposal.
 
 ---
 
@@ -126,18 +183,36 @@ named constants at the top of `pitch.py`.
 
 **The score**
 
-- **Log scales for audience and media.** On a normal scale a 12 million audience would make a 150,000
-  audience look like nothing. On a log scale each tenfold jump adds the same number of points, so small
-  properties still get meaningful scores next to big ones.
+- **A log scale for audience, with bounds set from the real data.** On a normal scale a 1.8 million audience
+  would make a 20,000 audience look like nothing. On a log scale each tenfold jump adds the same number of
+  points. The real audiences run from 150 (a university club) to 1.8 million (Queen's). The old floor of 1,000
+  would have scored the 150 club at exactly 0, so the floor is now **100**. The ceiling is **10 million**: it
+  keeps the real values well spread (about 0.4 to 8.5 out of 10) and leaves room above Queen's for the very
+  biggest events.
+- **Broadcast is a rated tier, not a count of impressions.** Impression counts are rarely published and are
+  not comparable between a TV audience and a stream. A 0 to 10 tier with a written rubric is consistent and
+  honest about being a judgement.
+- **Median engagement, and a neutral score when it cannot be trusted** (see above), so a tiny or missing
+  account is neither rewarded nor punished.
 - **Weights always total 100.** Sliders let you change what matters, but the weights are rescaled so the
   score never stops meaning "out of 100".
-- **Prestige counts least.** It overlaps with audience and media exposure, so weighting it heavily would
+- **Prestige counts least.** It overlaps with audience and broadcast exposure, so weighting it heavily would
   reward the same thing twice.
 - **Demographics means purchasing power only.** Age is left out of the score on purpose. A young or older
   audience is not worth less, it suits different brands, so age is handled in brand matching instead.
 - **Premium and Challenger tournaments are separate property types.** Luxury brands fit a premium grass
   event far better than a Challenger, and local brands the other way round, so they need their own fit scores.
+  Financial services fits a premium tournament at 9 because Queen's real title sponsor is a bank.
 - **Category fit lives in a CSV, not in code,** so you can adjust it without touching Python.
+
+**Honesty about the data**
+
+- **Every figure carries a source and a confidence label,** and the app shows the label next to each figure.
+  Estimates are never presented as published facts.
+- **Source links are left blank rather than guessed.**
+- **Age profiles are flagged as unresearched** in the data and in the app, because brand matching depends on them.
+- **Players and events share one audience scale.** A player's audience is Instagram followers and an event's is
+  attendance plus TV audience. They are different things, so comparing them directly is a simplification.
 
 **Matching and safety**
 
@@ -156,19 +231,19 @@ named constants at the top of `pitch.py`.
 
 - **It is written for the brand, not for you.** It contains no scores, ratings or internal analysis. Those
   live in the app's separate Analysis section.
-- **It shows only strengths.** For example the engagement rate appears only at 4% or above. It also has no
-  £ valuation or fee.
+- **It shows only strengths.** For example the engagement rate appears only at 4% or above, and the
+  broadcast line only at tier 4 or above. It has no £ valuation or fee.
 - **It is one separate function,** `generate_pitch`, so an AI writer can replace it later without changing
   anything else (see below).
-- **"Placeholder" is hidden from displayed names** (app and pitch) but stays in the CSV files and in the
-  warning banners, so sample data can never be mistaken for real data.
+- **"Placeholder" is hidden from displayed names** (app and pitch) but stays in the brand CSV and in the
+  banners, so sample brands can never be mistaken for real companies.
 
 **The build**
 
 - **Plain Python, CSV files and no scraping or paid services,** so it runs anywhere and every number can be
   traced to a file you can open.
-- **Tests use made-up data** wherever possible, so they keep passing when you edit the sample CSVs. A separate
-  set of tests checks that the CSV files agree with each other.
+- **Tests use made-up data** wherever possible, so they keep passing when you edit the CSVs. A separate
+  set of tests checks that the CSV files agree with each other, and one pins the researched figures.
 
 ---
 
@@ -188,18 +263,22 @@ single line in `app.py` that calls `generate_pitch`. Scoring, matching and the d
 | `scoring.py`, `matching.py`, `pitch.py` | the three steps: score, match, pitch |
 | `display.py` | tidies names for display (hides "Placeholder") |
 | `data_loader.py` | reads the CSV files |
+| `data/` | the four editable CSV files |
 | `.streamlit/config.toml` | app settings (reload automatically when files are saved) |
 | `requirements.txt` | the packages to install (Streamlit and watchdog) |
-| `data/` | the four editable CSV files |
 | `tests/` | automated tests (data, scoring, matching, pitch, display, app) |
 | `show_scores.py`, `show_matches.py`, `show_pitch.py` | print results in the terminal, for checking |
 | `PLAN.md` | what was agreed and why |
 
 ---
 
-## Known limits of version 1
+## Known limits of version 2
 
-- All figures are invented placeholders. The score and matches are only as good as the data behind them.
-- Matching considers age and category only. It does not consider geography, budget or existing sponsor conflicts.
+- Several figures are estimates (all the higher-income shares, the broadcast tiers, the prestige ratings, and
+  the audiences of Roehampton and the university club). The confidence labels say which.
+- The audience age profiles are unresearched, so brand matching is only as good as those guesses.
+- Brands are illustrative categories, so matches show which kind of brand fits, not which company.
+- Matching considers age and category only. It does not consider geography, budget or existing sponsor conflicts
+  (Queen's real title sponsor is a bank, so a bank "match" for Queen's would conflict in reality).
 - The score is a relative comparison between the properties in the file, not a financial valuation.
 - The pitch is a template. It reads well, but it is not tailored beyond the data fields.

@@ -14,14 +14,26 @@ something, so the page always reflects the current choices. All the real work
 (scoring, matching, pitch writing) happens in the other .py files.
 """
 
+from datetime import date
+
 import pandas as pd  # installed together with Streamlit; used here to tint the chosen row
 import streamlit as st
 
 from data_loader import load_activations, load_brands, load_category_fit, load_properties
 from display import clean_name, type_label
 from matching import MATCH_WEIGHTS, joint_first, match_brands
-from pitch import generate_pitch, in_words
-from scoring import DEFAULT_WEIGHTS, FACTOR_LABELS, normalise_weights, rank_labels, rank_properties, score_property
+from pitch import FOLLOWER_TYPES, generate_pitch, in_words
+from scoring import (
+    CONFIDENCE_COLUMN,
+    DEFAULT_WEIGHTS,
+    FACTOR_LABELS,
+    broadcast_description,
+    engagement_is_measurable,
+    normalise_weights,
+    rank_labels,
+    rank_properties,
+    score_property,
+)
 
 st.set_page_config(page_title="Sponsorship Scout", page_icon="🎾", layout="wide")
 
@@ -67,10 +79,20 @@ def reset_weights():
 st.title("🎾 Sponsorship Scout")
 st.caption("Score a tennis property, find its best-fit brands and draft a partnership pitch.")
 
-if any(row.get("is_placeholder") for row in properties + brands):
+collected = max((p["date_collected"] for p in properties if p.get("date_collected")), default=None)
+collected_text = f"{date.fromisoformat(collected).day} {date.fromisoformat(collected):%B %Y}" if collected else "an unknown date"
+
+if any(p.get("is_placeholder") for p in properties):
     st.warning(
-        "**PLACEHOLDER DATA.** Every property, brand and number in this app is an invented example, "
-        "not real research. Replace the CSV files in the data folder with real figures before relying on any result."
+        "**PLACEHOLDER DATA.** Some properties in this app are invented examples, not real research. "
+        "Replace the CSV files in the data folder with real figures before relying on any result."
+    )
+elif any(b.get("is_placeholder") for b in brands):
+    st.warning(
+        f"**Real properties, illustrative brands.** The properties are real, with sourced or estimated figures "
+        f"as of {collected_text} (the Analysis section shows how confident each figure is). "
+        "The brands are illustrative categories, not real companies, and the pitches are illustrative only, "
+        "not real proposals."
     )
 
 # ===========================================================================
@@ -148,12 +170,20 @@ result = score_property(chosen, weights)
 st.subheader("Commercial score")
 st.metric("Out of 100", f"{result['total']:.1f}")
 
-# How to show each raw number from properties.csv in plain words.
+# How to show each raw figure from properties.csv in plain words.
+if chosen["property_type"] in FOLLOWER_TYPES:
+    audience_figure = f"{chosen['annual_audience_reach']:,} Instagram followers"
+else:
+    audience_figure = f"{in_words(chosen['annual_audience_reach'])} people"
+if engagement_is_measurable(chosen):
+    engagement_figure = f"{chosen['engagement_rate_pct']}% engagement rate"
+else:
+    engagement_figure = "Not measurable (neutral score of 5 used)"
 raw_figures = {
-    "audience": f"{in_words(chosen['annual_audience_reach'])} people a year",
-    "engagement": f"{chosen['engagement_rate_pct']}% engagement rate",
+    "audience": audience_figure,
+    "engagement": engagement_figure,
     "demographics": f"{chosen['high_income_share_pct']}% higher-income",
-    "media": f"{in_words(chosen['annual_media_impressions'])} impressions a year",
+    "media": f"Tier {chosen['broadcast_tier']}: {broadcast_description(chosen['broadcast_tier'])}",
     "prestige": f"{chosen['prestige_rating']} out of 10",
 }
 st.dataframe(
@@ -161,6 +191,7 @@ st.dataframe(
         {
             "Factor": FACTOR_LABELS[factor],
             "Figure": raw_figures[factor],
+            "Confidence": item["confidence"].capitalize(),
             "Score (0-10)": round(item["score"], 1),
             "Weight": round(item["weight"], 1),
             "Points": round(item["points"], 1),
@@ -175,6 +206,29 @@ st.dataframe(
         "Points": st.column_config.NumberColumn(format="%.1f"),
     },
 )
+st.caption(
+    "Confidence: **Published** = a published figure. **Calculated** = worked out from published figures or posts. "
+    "**Estimate** = a judgement, so treat it with care."
+)
+
+# Where each figure came from. Collapsed by default to keep the page tidy.
+with st.expander(f"Data sources (collected {chosen.get('date_collected', 'unknown date')})"):
+    source_rows = []
+    for factor, column in CONFIDENCE_COLUMN.items():
+        prefix = column.removesuffix("_confidence")
+        source_rows.append({
+            "Figure": FACTOR_LABELS[factor],
+            "Source": chosen.get(f"{prefix}_source", "") or "(none recorded)",
+            "Confidence": result["factors"][factor]["confidence"].capitalize(),
+            "Link": chosen.get(f"{prefix}_source_url", "") or "-",
+        })
+    source_rows.append({
+        "Figure": "Audience age profile (used in matching)",
+        "Source": chosen.get("age_profile_source", "") or "(none recorded)",
+        "Confidence": str(chosen.get("age_profile_confidence", "")).capitalize(),
+        "Link": "-",
+    })
+    st.dataframe(source_rows, hide_index=True, width="stretch")
 
 # --- Brand matches ---------------------------------------------------------
 outcome = match_brands(chosen, brands, category_fit)
@@ -187,6 +241,11 @@ st.caption(
     f"and category fit ({MATCH_WEIGHTS['category_fit'] / match_total:.0%}). "
     "Brands marked '=' are tied."
 )
+if str(chosen.get("age_profile_confidence", "")).lower() == "estimate":
+    st.caption(
+        "Matching uses the property's audience age profile, which is currently an estimate "
+        "(not yet researched), so treat the audience-overlap figures with care."
+    )
 for match in matches:
     with st.container(border=True):
         st.markdown(f"**{match['rank_label']}. {clean_name(match['brand']['name'])}** · match score **{match['total']:.1f} / 100**")

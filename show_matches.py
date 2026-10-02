@@ -10,7 +10,7 @@ from matching import MATCH_WEIGHTS, match_brands
 brands = load_brands()
 category_fit = load_category_fit()
 
-print("PLACEHOLDER DATA: matches below use invented sample numbers.\n")
+print("Properties are real; brands are illustrative categories; audience age profiles are unresearched estimates.\n")
 print(f"Match split: {MATCH_WEIGHTS['audience_overlap']} audience overlap / {MATCH_WEIGHTS['category_fit']} category fit\n")
 
 for prop in load_properties():
