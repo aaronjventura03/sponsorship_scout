@@ -1,0 +1,20 @@
+# PLACEHOLDER DATA: all brand names and numbers below are invented examples, not real companies.
+# target_age_* columns = % of the brand's target customers in each age band and must total 100.
+# suitable_for_minors = FALSE ONLY for age-restricted products (alcohol, gambling and similar). These are removed from matching for properties with a youth audience.
+# Brands that simply do not target children (private bank, watchmaker, luxury car maker and so on) are marked TRUE, because sponsors at junior events are often targeting parents.
+# Food high in fat, sugar or salt faces UK advertising restrictions around children, so this sample uses a healthy snack brand for youth events.
+# uk_link = why the brand is relevant to the UK market (British brand or active UK sport sponsor).
+id,name,category,market,uk_link,target_age_under18_pct,target_age_18_24_pct,target_age_25_34_pct,target_age_35_54_pct,target_age_55plus_pct,suitable_for_minors,is_placeholder
+B01,Placeholder Luxury Watchmaker,luxury_watches,UK,Active UK sport sponsor,0,5,25,45,25,TRUE,TRUE
+B02,Placeholder Heritage Jeweller,luxury_jewellery,UK,British brand,0,10,25,40,25,TRUE,TRUE
+B03,Placeholder Private Bank,financial_services,UK,British brand,0,2,18,45,35,TRUE,TRUE
+B04,Placeholder Student Bank,student_services,UK,British brand,0,80,15,5,0,TRUE,TRUE
+B05,Placeholder Performance Sportswear,sportswear,UK,Active UK sport sponsor,15,35,30,15,5,TRUE,TRUE
+B06,Placeholder Racket and Ball Maker,sports_equipment,UK,Active UK sport sponsor,20,20,20,30,10,TRUE,TRUE
+B07,Placeholder Healthy Snack Brand,healthy_snacks,UK,British brand,60,0,5,35,0,TRUE,TRUE
+B08,Placeholder Sports Drink,food_drink,UK,Active UK sport sponsor,15,30,30,20,5,TRUE,TRUE
+B09,Placeholder Premium Sparkling Wine,premium_drinks,UK,Active UK sport sponsor,0,10,30,40,20,FALSE,TRUE
+B10,Placeholder Luxury Car Maker,automotive,UK,Active UK sport sponsor,0,3,20,47,30,TRUE,TRUE
+B11,Placeholder Consumer Tech Company,tech,UK,Active UK sport sponsor,10,30,30,25,5,TRUE,TRUE
+B12,Placeholder Electric Car Maker,automotive,UK,Active UK sport sponsor,0,5,25,45,25,TRUE,TRUE
+B13,Placeholder Regional Car Dealership,local_business,UK,Regional UK business serving the local community,5,10,25,40,20,TRUE,TRUE

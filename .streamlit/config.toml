@@ -1,0 +1,6 @@
+# Streamlit settings for this project (read when the app starts, from the project folder).
+
+[server]
+# Re-run the app automatically whenever a project file is saved, so you never have to
+# click "Rerun". Needs the watchdog package (listed in requirements.txt).
+runOnSave = true

@@ -1,0 +1,9 @@
+# Files Python creates automatically; no need to keep a history of them.
+__pycache__/
+*.pyc
+
+# The private Python environment (can be recreated, so it is not saved)
+.venv/
+
+# Mac folder settings
+.DS_Store

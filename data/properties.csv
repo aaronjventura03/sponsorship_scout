@@ -1,0 +1,10 @@
+# PLACEHOLDER DATA: all names and numbers below are invented examples. Replace with researched figures before real use.
+# annual_audience_reach = estimated unique people reached per year, as a mix of in-person attendance, broadcast and streaming viewers, and digital or social reach, with each person counted once where possible. engagement_rate_pct = average social engagement rate. high_income_share_pct = % of audience in higher-income brackets.
+# annual_media_impressions = total media impressions per year. prestige_rating = your own 1-10 judgement. age_* columns = % of audience in each age band and must total 100.
+# audience_includes_minors = TRUE means brands unsuitable for minors are excluded from matching.
+id,name,property_type,market,description,annual_audience_reach,engagement_rate_pct,high_income_share_pct,annual_media_impressions,prestige_rating,age_under18_pct,age_18_24_pct,age_25_34_pct,age_35_54_pct,age_55plus_pct,audience_includes_minors,is_placeholder
+P01,Placeholder London Grass-Court Premier Tournament,premium_tournament,UK,Premium ATP 500-level grass-court tournament in London,12000000,3.2,42,250000000,9,8,12,20,35,25,FALSE,TRUE
+P02,Placeholder UK Challenger Event,challenger_tournament,UK,ATP Challenger-level event held in the UK,150000,2.1,25,3000000,4,10,15,20,30,25,FALSE,TRUE
+P03,Placeholder Rising British Player (Top 150),player,UK,British player ranked around the top 150 and rising,450000,5.5,30,20000000,5,10,25,28,25,12,FALSE,TRUE
+P04,Placeholder BUCS University Tennis Team,university_team,UK,University team competing in the BUCS league,8000,6.0,12,300000,2,2,80,10,5,3,FALSE,TRUE
+P05,Placeholder ITF Junior Tournament,junior_event,UK,ITF junior tournament with a family and youth audience,25000,4.0,40,500000,3,55,5,5,30,5,TRUE,TRUE

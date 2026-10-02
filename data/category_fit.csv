@@ -1,0 +1,17 @@
+# PLACEHOLDER DATA: these are starting guesses. Edit them freely. Scores run 0 (poor fit) to 10 (excellent fit).
+# Each row is a brand category. category_label is the friendly name shown in explanations (for example "luxury watch" appears as "luxury watch brands are rated ..."). Every other column is a property type.
+# To add a property type, add a column and use the same name in properties.csv. To add a brand category, add a row here and use the same category name in brands.csv and activations.csv.
+# Premium events suit luxury and national brands; Challenger events suit local, regional and grassroots-minded brands.
+category,category_label,premium_tournament,challenger_tournament,player,university_team,junior_event
+luxury_watches,luxury watch,10,4,8,2,1
+luxury_jewellery,luxury jewellery,9,3,5,1,1
+financial_services,financial services,8,7,6,4,6
+student_services,student services,1,4,2,10,2
+sportswear,sportswear,8,7,10,8,8
+sports_equipment,sports equipment,7,8,10,9,9
+healthy_snacks,healthy snack,4,6,4,3,10
+food_drink,food and drink,7,8,8,7,6
+premium_drinks,premium drinks,9,5,4,3,0
+automotive,automotive,9,5,7,3,3
+tech,tech,8,7,8,7,6
+local_business,local business,2,9,3,6,7

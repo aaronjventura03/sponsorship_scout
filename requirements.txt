@@ -1,0 +1,4 @@
+streamlit
+# Lets Streamlit notice changed .py files and reload them. Building it needs
+# Apple's Command Line Tools on a Mac (xcode-select --install).
+watchdog
