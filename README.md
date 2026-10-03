@@ -191,7 +191,9 @@ For a player, rate the coverage their typical matches get.
 activation ideas and next steps. "Why the brand" holds up to three benefits, chosen in this priority order:
 audience, engagement, category fit, purchasing power. The "highly engaged following" benefit needs **both** an
 engagement rate of at least 4% (`ENGAGEMENT_MIN_PCT`) **and** at least 100 engagements per post
-(`ENGAGEMENT_MIN_PER_POST`), because a high rate on its own can come from a very small account. The sign-off name and title, and every threshold, are
+(`ENGAGEMENT_MIN_PER_POST`), because a high rate on its own can come from a very small account. The
+"Social media engagement rate" line in the property stats follows exactly the same rule, so the two always
+appear together or not at all. The sign-off name and title, and every threshold, are
 named constants at the top of `pitch.py`. It starts with a short disclaimer line saying the brand is an
 illustrative category and the pitch is not a real proposal.
 
@@ -258,8 +260,9 @@ illustrative category and the pitch is not a real proposal.
 
 - **It is written for the brand, not for you.** It contains no scores, ratings or internal analysis. Those
   live in the app's separate Analysis section.
-- **It shows only strengths.** For example the engagement rate appears only at 4% or above, and the
-  broadcast line only at tier 4 or above. It has no £ valuation or fee.
+- **It shows only strengths.** For example the engagement rate appears only at 4% or above *and* with at least
+  100 engagements per post (so a high rate on a tiny account is not shown), and the broadcast line only at
+  tier 4 or above. It has no £ valuation or fee.
 - **It is one separate function,** `generate_pitch`, so an AI writer can replace it later without changing
   anything else (see below).
 - **"Placeholder" is hidden from displayed names** (app and pitch) but stays in the brand CSV and in the

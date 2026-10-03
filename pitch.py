@@ -105,15 +105,16 @@ def _approximately(prop, figure, text):
 
 
 def _engagement_rate_is_strong(prop):
-    """Could engagement be measured, and is the engagement RATE a strength worth
-    showing to a brand? (The rate is what a brand understands; the app scores
-    engagements per post.)"""
+    """Could engagement be measured, and is the engagement RATE high enough?
+    (The rate is what a brand understands; the app scores engagements per post.)
+    This is only half of the test in _engagement_is_strong below."""
     rate = prop.get("engagement_rate_pct")
     return engagement_is_measurable(prop) and isinstance(rate, (int, float)) and rate >= ENGAGEMENT_MIN_PCT
 
 
 def _engagement_is_strong(prop):
-    """Is engagement strong enough to claim "a highly engaged following"?
+    """Is engagement strong enough to show the engagement rate, or to claim "a highly
+    engaged following"? Both use this test.
     It needs BOTH a strong rate AND a real volume of engagement: a high rate on its
     own can come from a tiny account, so at least ENGAGEMENT_MIN_PER_POST engagements
     per post are required as well."""
@@ -273,7 +274,7 @@ def generate_pitch(prop, match, activations, max_activations=MAX_ACTIVATIONS):
         lines.append(f"- Instagram followers: {audience}")
     else:
         lines.append(f"- Audience reach: {audience} people")
-    if _engagement_rate_is_strong(prop):
+    if _engagement_is_strong(prop):  # the same two-part test as the "highly engaged" benefit
         lines.append(f"- Social media engagement rate: {prop['engagement_rate_pct']}%")
     if prop["broadcast_tier"] >= BROADCAST_MIN_TIER:
         lines.append(f"- Broadcast coverage: {broadcast_description(prop['broadcast_tier'])}")

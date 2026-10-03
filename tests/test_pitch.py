@@ -428,18 +428,45 @@ class EngagementRequirementTests(unittest.TestCase):
         self.assertNotIn("highly engaged", bullets)
         self.assertIn("higher-income", bullets)
 
-    def test_the_rate_line_in_the_property_stats_still_follows_the_rate_alone(self):
-        # Only the benefit needs the extra volume check. The stats line is a plain fact.
-        prop = make_property(PROP_AGES, engagement_rate_pct=20, engagement_per_post=50)
-        self.assertIn("Social media engagement rate: 20%", section(make_pitch(prop=prop), "## The property"))
+    def stats_line_shown(self, rate, per_post, **extra):
+        prop = make_property(PROP_AGES, engagement_rate_pct=rate, engagement_per_post=per_post, **extra)
+        return "Social media engagement rate" in section(make_pitch(prop=prop), "## The property")
 
-    def test_the_real_data_shows_the_bullet_only_for_toby_samuel(self):
-        shown = []
+    def test_the_rate_line_in_the_property_stats_needs_the_same_two_conditions(self):
+        self.assertTrue(self.stats_line_shown(rate=4, per_post=100))      # exactly on both thresholds
+        self.assertTrue(self.stats_line_shown(rate=13.8, per_post=878))
+        self.assertFalse(self.stats_line_shown(rate=20, per_post=99))     # high rate, tiny account
+        self.assertFalse(self.stats_line_shown(rate=3.9, per_post=5_000))  # lots of engagement, low rate
+        self.assertFalse(self.stats_line_shown(rate="", per_post=""))     # not measurable
+
+    def test_the_rate_line_and_the_bullet_always_appear_together(self):
+        # They share one test, so a pitch can never show one without the other.
+        for rate in (1, 3.9, 4, 20):
+            for per_post in (0, 99, 100, 5_000):
+                prop = make_property(PROP_AGES, engagement_rate_pct=rate, engagement_per_post=per_post)
+                text = make_pitch(prop=prop)
+                self.assertEqual(
+                    "Social media engagement rate" in text, ENGAGEMENT_BULLET in text, (rate, per_post)
+                )
+
+    def test_the_rate_line_reads_the_same_constants(self):
+        with mock.patch.object(pitch, "ENGAGEMENT_MIN_PER_POST", 1_000):
+            self.assertFalse(self.stats_line_shown(rate=13.8, per_post=878))
+        with mock.patch.object(pitch, "ENGAGEMENT_MIN_PCT", 20):
+            self.assertFalse(self.stats_line_shown(rate=13.8, per_post=878))
+
+    def test_the_real_data_shows_the_bullet_and_the_rate_line_only_for_toby_samuel(self):
+        bullet_shown, line_shown = [], []
         for prop in load_properties():
             match = match_brands(prop, load_brands(), load_category_fit())["matches"][0]
-            if ENGAGEMENT_BULLET in pitch.generate_pitch(prop, match, load_activations()):
-                shown.append(prop["name"])
-        self.assertEqual(shown, ["Toby Samuel"])  # the only one with a 4%+ rate AND 100+ per post
+            text = pitch.generate_pitch(prop, match, load_activations())
+            if ENGAGEMENT_BULLET in text:
+                bullet_shown.append(prop["name"])
+            if "Social media engagement rate" in text:
+                line_shown.append(prop["name"])
+        # Toby Samuel is the only one with a 4%+ rate AND 100+ engagements per post.
+        self.assertEqual(bullet_shown, ["Toby Samuel"])
+        self.assertEqual(line_shown, ["Toby Samuel"])
 
 
 class EstimateWordingTests(unittest.TestCase):
