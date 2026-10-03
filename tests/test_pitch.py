@@ -469,6 +469,83 @@ class EngagementRequirementTests(unittest.TestCase):
         self.assertEqual(line_shown, ["Toby Samuel"])
 
 
+class BlankFigureTests(unittest.TestCase):
+    """A Wikipedia lookup may leave figures blank. The pitch must cope, and simply skip them."""
+
+    def pitch_with(self, **blank):
+        prop = make_property(PROP_AGES)
+        prop.update(blank)
+        return make_pitch(prop=prop)
+
+    def test_a_blank_audience_leaves_out_the_audience_line(self):
+        text = self.pitch_with(annual_audience_reach="")
+        self.assertNotIn("Audience reach", text)
+        self.assertIn("## The property", text)
+
+    def test_a_blank_broadcast_tier_leaves_out_the_broadcast_line(self):
+        self.assertNotIn("Broadcast coverage", self.pitch_with(broadcast_tier=""))
+
+    def test_a_blank_income_share_leaves_out_the_purchasing_power_benefit(self):
+        text = self.pitch_with(high_income_share_pct="", engagement_rate_pct=1)
+        self.assertNotIn("higher-income", text)
+
+    def test_a_pitch_with_every_figure_blank_still_reads_properly(self):
+        text = self.pitch_with(
+            annual_audience_reach="", engagement_per_post="", engagement_rate_pct="",
+            high_income_share_pct="", broadcast_tier="", prestige_rating="",
+        )
+        for section_heading in ("# Partnership opportunity", "## The property", "## Why Test Brand", "## Activation ideas", "## Next steps"):
+            self.assertIn(section_heading, text)
+        for bad in ("None", "nan", "{", "}"):
+            self.assertNotIn(bad, text)
+        self.assertGreaterEqual(len(bullets_under_why(text)), 1)  # at least the audience or category benefit
+
+    def test_the_reach_fallback_is_skipped_when_there_is_no_audience_figure(self):
+        prop = make_property(PROP_AGES, high_income=5, engagement_rate_pct=1, annual_audience_reach="")
+        weak = make_pitch(prop=prop, match=make_match(BRAND_AGES, fit=1))
+        self.assertNotIn("Your brand would reach", weak)
+
+
+class PageViewAudienceTests(unittest.TestCase):
+    """When the audience figure is Wikipedia page views, the pitch must say so, not "people" or "followers"."""
+
+    SOURCE = "Wikipedia page views: average of the last 12 complete months x 12 (a proxy for public interest, not attendance)"
+
+    def stats(self, **changes):
+        prop = make_property(PROP_AGES, annual_audience_reach=123_941, audience_source=self.SOURCE,
+                             audience_confidence="calculated", **changes)
+        return section(make_pitch(prop=prop), "## The property")
+
+    def test_an_event_is_described_by_online_interest_not_people(self):
+        stats = self.stats()
+        self.assertIn("Online interest: 123,941 Wikipedia page views a year", stats)
+        self.assertNotIn("Audience reach", stats)
+        self.assertNotIn("people", stats)
+
+    def test_a_player_is_not_described_as_having_that_many_instagram_followers(self):
+        stats = self.stats(property_type="player")
+        self.assertIn("Online interest: 123,941 Wikipedia page views a year", stats)
+        self.assertNotIn("Instagram followers", stats)
+
+    def test_real_attendance_and_followers_are_unaffected(self):
+        plain = section(make_pitch(prop=make_property(PROP_AGES, audience_source="LTA 2025 attendance")), "## The property")
+        self.assertIn("Audience reach: 12 million people", plain)
+        player = section(make_pitch(prop=make_property(PROP_AGES, property_type="player", annual_audience_reach=6_369,
+                                                       audience_source="Instagram followers")), "## The property")
+        self.assertIn("Instagram followers: 6,369", player)
+
+    def test_an_estimated_page_view_figure_still_says_about(self):
+        prop = make_property(PROP_AGES, annual_audience_reach=50_000, audience_source=self.SOURCE, audience_confidence="estimate")
+        self.assertIn("Online interest: about 50,000 Wikipedia page views a year", section(make_pitch(prop=prop), "## The property"))
+
+    def test_the_reach_fallback_does_not_call_page_views_people(self):
+        prop = make_property(PROP_AGES, high_income=5, engagement_rate_pct=1, annual_audience_reach=80_000,
+                             audience_source=self.SOURCE, audience_confidence="calculated")
+        weak = make_pitch(prop=prop, match=make_match(BRAND_AGES, fit=1))
+        self.assertIn("The tournament attracts 80,000 Wikipedia page views a year.", weak)
+        self.assertNotIn("Your brand would reach", weak)
+
+
 class EstimateWordingTests(unittest.TestCase):
     """Estimated figures must never read like facts: they get "about" or "An estimated"."""
 

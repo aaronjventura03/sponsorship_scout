@@ -20,7 +20,8 @@ import pandas as pd  # installed together with Streamlit; used here to tint the 
 import streamlit as st
 
 from data_loader import load_activations, load_brands, load_category_fit, load_properties
-from display import clean_name, type_label
+import lookup_ui
+from display import clean_name, property_label, type_label
 from matching import MATCH_WEIGHTS, joint_first, match_brands
 from pitch import FOLLOWER_TYPES, generate_pitch, in_words
 from scoring import (
@@ -96,12 +97,24 @@ elif any(b.get("is_placeholder") for b in brands):
     )
 
 # ===========================================================================
+# Look up a tournament or player on Wikipedia (optional)
+# ===========================================================================
+# The property types are the columns of category_fit.csv (everything except the two label columns).
+property_types = [column for column in category_fit[0] if column not in ("category", "category_label")]
+lookup_ui.render(property_types)
+
+# A property made from a lookup lives in this browser session only. It joins the saved ones
+# in the picker, the ranking, the analysis and the pitch, and is never written to a CSV file.
+lookups = list(st.session_state.get("custom_properties", {}).values())
+all_properties = properties + lookups
+
+# ===========================================================================
 # Sidebar: property picker and weight sliders
 # ===========================================================================
 with st.sidebar:
     st.header("Property")
-    names = [clean_name(p["name"]) for p in properties]  # "Placeholder" is hidden from displayed names
-    chosen = properties[names.index(st.selectbox("Choose a tennis property", names))]
+    names = [property_label(p) for p in all_properties]  # "Placeholder" is hidden from displayed names
+    chosen = all_properties[names.index(st.selectbox("Choose a tennis property", names, key="property_choice"))]
 
     st.header("Score weights")
     st.caption(
@@ -131,7 +144,7 @@ with st.sidebar:
 st.header("Property ranking")
 st.caption("Commercial value out of 100. The table updates as you move the sliders.")
 
-ranked = rank_properties(properties, weights)
+ranked = rank_properties(all_properties, weights)
 labels = rank_labels([result["total"] for _, result in ranked])
 
 # The ranking shows only the headline numbers. The factor-by-factor breakdown
@@ -139,7 +152,7 @@ labels = rank_labels([result["total"] for _, result in ranked])
 table = [
     {
         "Rank": label,
-        "Property": clean_name(prop["name"]),
+        "Property": property_label(prop),
         "Type": type_label(prop["property_type"]),
         "Score": result["total"],
     }
@@ -147,7 +160,7 @@ table = [
 ]
 def highlight_chosen(row):
     """Give the chosen property's row a soft tinted background."""
-    tint = "background-color: rgba(255, 75, 75, 0.18)" if row["Property"] == clean_name(chosen["name"]) else ""
+    tint = "background-color: rgba(255, 75, 75, 0.18)" if row["Property"] == property_label(chosen) else ""
     return [tint] * len(row)
 
 
@@ -164,30 +177,50 @@ st.dataframe(
 st.divider()
 st.header("Analysis")
 st.markdown(f"**{clean_name(chosen['name'])}** · {type_label(chosen['property_type'])}")
+if chosen.get("from_wikipedia"):
+    st.info(
+        "This property comes from a Wikipedia lookup plus your own entries. Figures marked Estimated are guesses. "
+        "It is kept for this browser session only: it is not saved to any file."
+    )
 
 # --- Score breakdown -------------------------------------------------------
 result = score_property(chosen, weights)
 st.subheader("Commercial score")
 st.metric("Out of 100", f"{result['total']:.1f}")
 
-# How to show each raw figure from properties.csv in plain words.
-if chosen["property_type"] in FOLLOWER_TYPES:
-    audience_figure = f"{chosen['annual_audience_reach']:,} Instagram followers"
+# How to show each raw figure from properties.csv in plain words. A blank figure (possible
+# for a Wikipedia lookup) is shown as "Not provided".
+def is_number(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+audience = chosen["annual_audience_reach"]
+if not is_number(audience):
+    audience_figure = "Not provided"
+elif str(chosen.get("audience_source", "")).startswith("Wikipedia page views"):
+    audience_figure = f"{audience:,} Wikipedia page views a year (a proxy for public interest)"
+elif chosen["property_type"] in FOLLOWER_TYPES:
+    audience_figure = f"{audience:,} Instagram followers"
 else:
-    audience_figure = f"{in_words(chosen['annual_audience_reach'])} people"
+    audience_figure = f"{in_words(audience)} people"
 if engagement_is_measurable(chosen):
     # Scored on engagements per post. The rate is shown as context only.
     engagement_figure = f"{chosen['engagement_per_post']:,} per post (median likes + comments)"
-    if isinstance(chosen.get("engagement_rate_pct"), (int, float)):
+    if is_number(chosen.get("engagement_rate_pct")) and is_number(chosen.get("engagement_followers")):
         engagement_figure += f" · rate {chosen['engagement_rate_pct']}% of {chosen['engagement_followers']:,} followers"
+    elif is_number(chosen.get("engagement_rate_pct")):
+        engagement_figure += f" · rate {chosen['engagement_rate_pct']}%"
 else:
-    engagement_figure = "Not measurable (no dedicated account)"
+    engagement_figure = "Not provided" if chosen.get("from_wikipedia") else "Not measurable (no dedicated account)"
 raw_figures = {
     "audience": audience_figure,
     "engagement": engagement_figure,
-    "demographics": f"{chosen['high_income_share_pct']}% higher-income",
-    "media": f"Tier {chosen['broadcast_tier']}: {broadcast_description(chosen['broadcast_tier'])}",
-    "prestige": f"{chosen['prestige_rating']} out of 10",
+    "demographics": f"{chosen['high_income_share_pct']}% higher-income" if is_number(chosen["high_income_share_pct"]) else "Not provided",
+    "media": (
+        f"Tier {chosen['broadcast_tier']}: {broadcast_description(chosen['broadcast_tier'])}"
+        if is_number(chosen["broadcast_tier"]) else "Not provided"
+    ),
+    "prestige": f"{chosen['prestige_rating']} out of 10" if is_number(chosen["prestige_rating"]) else "Not provided",
 }
 # If a factor could not be measured, say so clearly and explain what happened to its weight.
 if result["unmeasured"]:

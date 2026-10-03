@@ -92,6 +92,17 @@ def in_words(number):
     return f"{number:,}"
 
 
+def _is_number(value):
+    """True for a real number (a blank cell, which is empty text, is not one)."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _audience_is_page_views(prop):
+    """Does the audience figure come from Wikipedia page views (a Wikipedia lookup) rather than
+    attendance or followers? Then the pitch must not call it people or followers."""
+    return str(prop.get("audience_source", "")).startswith("Wikipedia page views")
+
+
 def _is_estimate(prop, figure):
     """Is this figure an estimate (rather than published or calculated)?
     `figure` is the start of its column name, such as "audience" or "high_income"."""
@@ -214,7 +225,7 @@ def _benefits(prop, match):
         candidates.append(good_wording.format(subject=subject, label=match["category_label"]))
 
     # 4. Purchasing power. An estimated share is introduced as "An estimated ...".
-    if prop["high_income_share_pct"] >= PURCHASING_POWER_MIN_PCT:
+    if _is_number(prop.get("high_income_share_pct")) and prop["high_income_share_pct"] >= PURCHASING_POWER_MIN_PCT:
         opening = "An estimated" if _is_estimate(prop, "high_income") else ""
         share = f"{prop['high_income_share_pct']}% of the audience is in higher-income brackets"
         sentence = f"{opening} {share}" if opening else share
@@ -222,10 +233,12 @@ def _benefits(prop, match):
 
     benefits = candidates[:3]
 
-    # Always give at least two benefits: fall back to reach.
-    if len(benefits) < 2:
+    # Always give at least two benefits where we can: fall back to reach (if we have an audience figure).
+    if len(benefits) < 2 and _is_number(prop.get("annual_audience_reach")):
         reach = _approximately(prop, "audience", in_words(prop["annual_audience_reach"]))
-        if prop["property_type"] in FOLLOWER_TYPES:
+        if _audience_is_page_views(prop):
+            benefits.append(f"The {noun} attracts {reach} Wikipedia page views a year.")
+        elif prop["property_type"] in FOLLOWER_TYPES:
             benefits.append(f"Your brand would reach {reach} followers.")
         else:
             benefits.append(f"Your brand would reach {reach} people.")
@@ -269,14 +282,17 @@ def generate_pitch(prop, match, activations, max_activations=MAX_ACTIVATIONS):
     lines.append("")
     # Only strengths are listed. The higher-income share is not repeated here
     # because it already appears in the "Why this brand" benefits.
-    audience = _approximately(prop, "audience", in_words(prop["annual_audience_reach"]))
-    if prop["property_type"] in FOLLOWER_TYPES:
-        lines.append(f"- Instagram followers: {audience}")
-    else:
-        lines.append(f"- Audience reach: {audience} people")
+    if _is_number(prop.get("annual_audience_reach")):
+        audience = _approximately(prop, "audience", in_words(prop["annual_audience_reach"]))
+        if _audience_is_page_views(prop):
+            lines.append(f"- Online interest: {audience} Wikipedia page views a year")
+        elif prop["property_type"] in FOLLOWER_TYPES:
+            lines.append(f"- Instagram followers: {audience}")
+        else:
+            lines.append(f"- Audience reach: {audience} people")
     if _engagement_is_strong(prop):  # the same two-part test as the "highly engaged" benefit
         lines.append(f"- Social media engagement rate: {prop['engagement_rate_pct']}%")
-    if prop["broadcast_tier"] >= BROADCAST_MIN_TIER:
+    if _is_number(prop.get("broadcast_tier")) and prop["broadcast_tier"] >= BROADCAST_MIN_TIER:
         lines.append(f"- Broadcast coverage: {broadcast_description(prop['broadcast_tier'])}")
     lines.append("")
 

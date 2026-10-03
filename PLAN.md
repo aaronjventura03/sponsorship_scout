@@ -198,6 +198,9 @@ which brand the pitch is written for.
 | `pitch.py` | The brand-facing pitch template (sign-off constants at the top) |
 | `display.py` | Hides "Placeholder" from displayed names, formats property types |
 | `data_loader.py` | Reads the CSV files |
+| `wikipedia_lookup.py` | Looks up a name on Wikipedia (the only code that uses the internet) |
+| `custom_property.py` | Turns the lookup form into a property record (sourced/estimated checks) |
+| `lookup_ui.py` | The "Look up on Wikipedia" section of the app |
 | `data/` | The four editable CSV files |
 | `tests/` | Automated tests (data, scoring, matching, pitch, display, app) |
 | `show_scores.py`, `show_matches.py`, `show_pitch.py` | Command-line printouts for checking results |
@@ -220,7 +223,7 @@ which brand the pitch is written for.
    banner always visible. Streamlit is installed in a private `.venv` folder inside the project.
    Run it with: `.venv/bin/streamlit run app.py` (from the `sponsorship_scout` folder).
 7. Final review: (done) all 5 properties run end to end through scoring, matching, pitch and
-   the app; the junior event excludes the age-restricted brand; 250 automated tests pass (after the final changes)
+   the app; the junior event excludes the age-restricted brand; 422 automated tests pass (after version 3)
    (23 of them drive the app and need Streamlit); README written.
 
 ## Changes agreed after the first plan
@@ -303,6 +306,37 @@ which brand the pitch is written for.
 23. The engagement rate line in the property stats now follows the same two-part rule as the "highly
     engaged" bullet (rate at least 4% and at least 100 engagements per post), so a small account with a high
     rate no longer shows a flattering percentage. The line and the bullet always appear together.
+
+## Version 3: Wikipedia lookup
+
+Goal: score a tournament or player that is not in the data files, using only free public APIs (no key,
+no account, no payment).
+
+What was built:
+
+- **`wikipedia_lookup.py`** (the only code that uses the internet): Wikipedia search, page summary, page
+  views from the Wikimedia service (last 12 complete months, average and a year's worth), and facts read
+  from the page's info box (wikitext cleaned of links, references and templates). Every fetched item
+  carries a source link. Errors become plain-English messages; the facts and page views are best-effort,
+  and the summary is required. Uses the `certifi` certificate list because python.org Python on a Mac
+  often cannot verify secure sites (found and fixed while testing against the live service).
+- **`custom_property.py`**: turns the form into a record with the same columns as `properties.csv`. Each
+  figure is marked Sourced or Estimated; a Sourced figure must cite a source; a blank figure is "not
+  measured" (its weight is redistributed). Page views fill the audience figure by default (labelled
+  "calculated", and a proxy for public interest, not attendance). The age profile starts as a default for
+  the chosen type, labelled "not researched". Nothing else is guessed.
+- **`lookup_ui.py`**: the app section (search, pick a page, "What Wikipedia gave us" table with source links,
+  a page-view chart, the form, validation). Wikipedia is contacted only inside button callbacks, never on a
+  plain re-run. A lookup is kept in the browser session only and is never written to the CSV files.
+- **App**: a lookup joins the property picker, the ranking (marked "(Wikipedia lookup)"), the analysis and the
+  pitch.
+- **Pitch**: copes with blank figures; an audience that is Wikipedia page views is described as "Online
+  interest: N Wikipedia page views a year", never as people or followers.
+- **Tests**: grew from 250 to 422. None uses the internet: `tests/wiki_fixtures.py` holds stand-in Wikipedia
+  replies shaped like the real ones, and a guard fails any test that reaches for the real downloader.
+
+Decisions: page views are offered as the audience figure (ticked by default, easy to untick) because they
+measure interest, not attendance. Lookups are not saved automatically. Only English Wikipedia is searched.
 
 ## Open items
 

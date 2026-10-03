@@ -7,6 +7,8 @@ player) and Sponsorship Scout will:
 2. **Match** it with the best-fit brands from a brand list, and explain why each one fits.
 3. **Draft a one-page partnership pitch**, written for the brand to read, that you can download.
 
+You can also **look up any tournament or player on Wikipedia** (free, no key) and score that too.
+
 > **What is real and what is not (version 2).**
 > The five **properties are real**, with sourced or estimated figures collected on 2 October 2026.
 > Every figure has a source and a confidence label (published, calculated or estimate), and the
@@ -59,13 +61,64 @@ research, update the `EXPECTED` table in `RealDataTests` to match.
 
 - **Sidebar:** pick a property and move the five weight sliders. The weights are always
   rescaled to total 100, so the score stays out of 100. "Reset to defaults" puts them back.
+- **Look up on Wikipedia:** type a tournament or player name, fetch its Wikipedia details, and score it
+  (see "Looking up a property on Wikipedia" below).
 - **Property ranking:** all properties ranked by score, with the chosen one tinted. It re-sorts
-  live as you move the sliders.
+  live as you move the sliders. Properties from
+  a Wikipedia lookup appear in the ranking too, marked "(Wikipedia lookup)".
 - **Analysis:** the chosen property's score breakdown with a **confidence label next to each figure**,
   a collapsed "Data sources" panel, its top brand matches with reasons, and any brands removed by the
   youth-audience rule. This is the internal view.
 - **Pitch:** choose a brand (it defaults to the top match, but you must choose if two brands tie
   for first), read the pitch, and download it as a Markdown file.
+
+---
+
+## Looking up a property on Wikipedia
+
+You can score a tournament or player that is not in the data files, using Wikipedia's **free public
+APIs** (no key, no account, no payment). Open "Look up a tournament or player on Wikipedia" near the top
+of the app.
+
+1. **Search.** Type a name and press "Search Wikipedia". The best few matching pages are listed with their
+   one-line descriptions. Pick the right one and press "Use this page".
+2. **See what Wikipedia says,** with a link to the source on every row:
+   - the page **summary**;
+   - **useful facts** from the page's info box (for a tournament: city, venue, surface, category, draw, prize
+     money; for a player: ranking, plays, birthplace, career prize money, and so on);
+   - **monthly page views** over the last 12 complete months, as a measure of public interest, with a chart.
+3. **Check the form.** It starts with what Wikipedia gave us: the name, a suggested property type, and the page
+   views as the audience figure. You add or correct the rest (engagements per post, higher-income share,
+   broadcast tier, prestige, the audience age profile).
+4. **Mark every figure Sourced or Estimated.** If you mark a figure *Sourced* you must say where it came from, or
+   the form is rejected. An *Estimated* figure is hedged in the pitch ("about 3,000 people", "An estimated 40%...").
+5. **Press "Score this property".** It is added to the property picker, the ranking, the analysis and the pitch,
+   and scored by exactly the same scoring, matching and pitch code as the saved properties.
+
+**Things to know**
+
+- **Page views are not attendance.** They measure online interest. They fill the audience figure by default
+  (the checkbox "Use Wikipedia page views as the audience figure" is ticked), they are labelled as a proxy, and
+  the pitch describes them as "Wikipedia page views a year", never as "people" or "followers". Untick the box or
+  overwrite the figure if you know the real attendance or audience.
+- **Nothing is guessed for you.** Anything Wikipedia does not have starts blank. A blank figure is "not measured":
+  it is left out of the score and its weight is shared across the other factors, as for Roehampton's engagement.
+  The one starting value that is not from Wikipedia is the audience age profile, which starts as a default for the
+  chosen property type and is labelled "not researched".
+- **A lookup lives in your browser session only.** It is never written to the CSV files. Refreshing the page
+  clears it; "Remove my Wikipedia lookups" clears it sooner. (To keep one, add it to `data/properties.csv`.)
+- **Wikipedia coverage varies.** Small events and clubs often have no page, no info box or no page-view data.
+  The app says what is missing and carries on. Only English Wikipedia is searched.
+- **Attribution.** Wikipedia's text is shared under the CC BY-SA 4.0 licence; the app shows this with a link.
+- **If the lookup says it cannot reach Wikipedia,** check your internet connection. If it mentions a
+  *certificate*, Python on your Mac cannot verify secure websites: open the Python folder in Applications and run
+  "Install Certificates.command", then try again.
+
+**How it is built** (all in plain Python, nothing to install or pay for):
+`wikipedia_lookup.py` talks to Wikipedia (search, summary, info box, page views) and is the only code that uses the
+internet; `custom_property.py` checks the form and turns it into the same kind of record as a row of
+`properties.csv`; `lookup_ui.py` is the section of the app you see. The tests replace Wikipedia with stand-ins, so
+they never use the internet.
 
 ---
 
@@ -268,10 +321,24 @@ illustrative category and the pitch is not a real proposal.
 - **"Placeholder" is hidden from displayed names** (app and pitch) but stays in the brand CSV and in the
   banners, so sample brands can never be mistaken for real companies.
 
+**The Wikipedia lookup**
+
+- **Only free, public, keyless services.** Wikipedia's search and summary, the Wikimedia page-views service, and
+  the page's own info box. No account, no payment, no scraping of web pages (the info box is read from the
+  page's official text through the API).
+- **Every fetched figure shows its source link,** so you can check it.
+- **Sourced figures must cite a source.** Without that rule, a guess could be marked "sourced" and look like fact.
+- **Page views are offered as the audience figure, not forced on you,** because they measure interest rather than
+  attendance. The pitch words them accordingly.
+- **A lookup goes through the same scoring, matching and pitch as everything else,** so it can be compared fairly
+  with the saved properties and gets the same honesty rules (confidence labels, "not measured", hedged wording).
+- **It is not saved.** Writing user-typed figures into your data files automatically would be easy to get wrong.
+
 **The build**
 
 - **Plain Python, CSV files and no scraping or paid services,** so it runs anywhere and every number can be
   traced to a file you can open.
+- **The tests never use the internet.** Wikipedia is replaced by stand-ins shaped like its real replies.
 - **Tests use made-up data** wherever possible, so they keep passing when you edit the CSVs. A separate
   set of tests checks that the CSV files agree with each other, and one pins the researched figures.
 
@@ -294,6 +361,9 @@ single line in `app.py` that calls `generate_pitch`. Scoring, matching and the d
 | `display.py` | tidies names for display (hides "Placeholder") |
 | `data_loader.py` | reads the CSV files |
 | `data/` | the four editable CSV files |
+| `wikipedia_lookup.py` | looks up a name on Wikipedia (the only code that uses the internet) |
+| `custom_property.py` | turns the lookup form into a property record, with sourced/estimated checks |
+| `lookup_ui.py` | the "Look up on Wikipedia" section of the app |
 | `.streamlit/config.toml` | app settings (reload automatically when files are saved) |
 | `requirements.txt` | the packages to install (Streamlit and watchdog) |
 | `tests/` | automated tests (data, scoring, matching, pitch, display, app) |
@@ -307,6 +377,8 @@ single line in `app.py` that calls `generate_pitch`. Scoring, matching and the d
 - Several figures are estimates (all the higher-income shares, the broadcast tiers, the prestige ratings, and
   the audiences of Roehampton and the university club). The confidence labels say which.
 - Roehampton is scored on four factors, not five, because it has no social account to measure.
+- A Wikipedia lookup is only as good as Wikipedia's page and the figures you add. Its page-view audience is a
+  proxy for online interest, so it is not directly comparable with an attendance-plus-TV figure.
 - The audience age profiles are unresearched judgements, so brand matching is only as good as those guesses.
   The pitch words its age-mix claims as "likely" for that reason.
 - Brands are illustrative categories, so matches show which kind of brand fits, not which company.

@@ -151,6 +151,11 @@ class AppLayoutTests(unittest.TestCase):
         self.assertGreaterEqual(len([m for m in at.markdown if " · match score" in m.value]), 3)
 
 
+def brand_picker(at):
+    """The pitch's brand picker, found by its label (not its position on the page)."""
+    return next(box for box in at.main.selectbox if box.label == "Brand for the pitch")
+
+
 def pandas_isna(value):
     """True for None or NaN (how an empty table cell comes back)."""
     return value is None or value != value
@@ -258,7 +263,8 @@ class ConfidenceDisplayTests(unittest.TestCase):
 
     def test_each_figures_source_is_listed_in_a_data_sources_panel(self):
         at = start_app()
-        self.assertEqual([e.label for e in at.expander], ["Data sources (collected 2026-10-02)"])
+        labels = [e.label for e in at.expander]
+        self.assertIn("Data sources (collected 2026-10-02)", labels)
         sources = at.dataframe[2].value
         self.assertEqual(
             list(sources["Figure"]),
@@ -348,7 +354,7 @@ class PropertyPickerTests(unittest.TestCase):
 class PitchSectionTests(unittest.TestCase):
     def test_pitch_defaults_to_the_number_one_brand_with_a_download_button(self):
         at = start_app()
-        picker = at.main.selectbox[0]
+        picker = brand_picker(at)
         self.assertIsNotNone(picker.value)
         self.assertTrue(picker.format_func(picker.value).startswith("1. "))
         self.assertIn(picker.format_func(picker.value).split(". ", 1)[1], pitch_markdown(at))
@@ -379,13 +385,13 @@ class JointFirstTests(unittest.TestCase):
         at = start_app()
         self.assertEqual(len(at.exception), 0)
         self.assertTrue(any("share first place" in w.value for w in at.warning))
-        self.assertIsNone(at.main.selectbox[0].value)  # no default
+        self.assertIsNone(brand_picker(at).value)  # no default
         self.assertIsNone(pitch_markdown(at))  # no pitch yet
         self.assertEqual(len(at.get("download_button")), 0)
 
     def test_pitch_appears_once_a_brand_is_chosen(self):
         at = start_app()
-        at.main.selectbox[0].select("B99").run()
+        brand_picker(at).select("B99").run()
         self.assertEqual(len(at.exception), 0)
         self.assertIn("Twin Watchmaker", pitch_markdown(at))
         self.assertNotIn("Placeholder", pitch_markdown(at))
@@ -395,7 +401,7 @@ class JointFirstTests(unittest.TestCase):
         at = start_app()
         at.sidebar.selectbox[0].select(clean_name(load_properties()[3]["name"])).run()  # the BUCS team: clear winner
         self.assertFalse(any("share first place" in w.value for w in at.warning))
-        self.assertIsNotNone(at.main.selectbox[0].value)
+        self.assertIsNotNone(brand_picker(at).value)
 
 
 class DataFolderTests(unittest.TestCase):

@@ -2,3 +2,6 @@ streamlit
 # Lets Streamlit notice changed .py files and reload them. Building it needs
 # Apple's Command Line Tools on a Mac (xcode-select --install).
 watchdog
+# The trusted-certificate list used to check that we are really talking to Wikipedia.
+# It is installed with Streamlit anyway; it is listed here because the Wikipedia lookup relies on it.
+certifi
