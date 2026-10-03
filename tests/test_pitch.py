@@ -380,6 +380,68 @@ class CategoryWordingTests(unittest.TestCase):
             self.assertIn(prop["property_type"], pitch.CATEGORY_FIT_STYLE, prop["property_type"])
 
 
+class EngagementRequirementTests(unittest.TestCase):
+    """The "highly engaged" bullet needs a strong RATE and a real VOLUME of engagement."""
+
+    def bullet_shown(self, rate, per_post, **extra):
+        prop = make_property(PROP_AGES, engagement_rate_pct=rate, engagement_per_post=per_post, **extra)
+        return ENGAGEMENT_BULLET in make_pitch(prop=prop)
+
+    def test_the_new_constant_is_100_engagements_per_post(self):
+        self.assertEqual(pitch.ENGAGEMENT_MIN_PER_POST, 100)
+
+    def test_both_conditions_met_shows_the_bullet(self):
+        self.assertTrue(self.bullet_shown(rate=pitch.ENGAGEMENT_MIN_PCT, per_post=pitch.ENGAGEMENT_MIN_PER_POST))
+        self.assertTrue(self.bullet_shown(rate=13.8, per_post=878))
+
+    def test_exactly_at_both_thresholds_counts(self):
+        self.assertTrue(self.bullet_shown(rate=4, per_post=100))
+
+    def test_a_high_rate_on_a_tiny_account_is_not_enough(self):
+        # 20% of 400 followers is only 80 engagements per post.
+        self.assertFalse(self.bullet_shown(rate=20, per_post=99))
+        self.assertFalse(self.bullet_shown(rate=20, per_post=23))
+
+    def test_lots_of_engagement_but_a_low_rate_is_not_enough(self):
+        # 2,025 per post on a 70,000-follower account is a 2.9% rate.
+        self.assertFalse(self.bullet_shown(rate=2.9, per_post=2_025))
+        self.assertFalse(self.bullet_shown(rate=3.9, per_post=5_000))
+
+    def test_neither_condition_met(self):
+        self.assertFalse(self.bullet_shown(rate=1, per_post=10))
+
+    def test_an_unmeasurable_engagement_never_shows_the_bullet(self):
+        self.assertFalse(self.bullet_shown(rate="", per_post=""))
+
+    def test_both_thresholds_are_read_from_the_named_constants(self):
+        with mock.patch.object(pitch, "ENGAGEMENT_MIN_PER_POST", 1_000):
+            self.assertFalse(self.bullet_shown(rate=13.8, per_post=878))
+            self.assertTrue(self.bullet_shown(rate=13.8, per_post=1_000))
+        with mock.patch.object(pitch, "ENGAGEMENT_MIN_PCT", 20):
+            self.assertFalse(self.bullet_shown(rate=13.8, per_post=878))
+            self.assertTrue(self.bullet_shown(rate=20, per_post=878))
+
+    def test_a_blocked_bullet_makes_room_for_the_next_benefit(self):
+        # Without the engagement bullet, purchasing power can take the third place.
+        prop = make_property(PROP_AGES, engagement_rate_pct=20, engagement_per_post=50)
+        bullets = "\n".join(bullets_under_why(make_pitch(prop=prop)))
+        self.assertNotIn("highly engaged", bullets)
+        self.assertIn("higher-income", bullets)
+
+    def test_the_rate_line_in_the_property_stats_still_follows_the_rate_alone(self):
+        # Only the benefit needs the extra volume check. The stats line is a plain fact.
+        prop = make_property(PROP_AGES, engagement_rate_pct=20, engagement_per_post=50)
+        self.assertIn("Social media engagement rate: 20%", section(make_pitch(prop=prop), "## The property"))
+
+    def test_the_real_data_shows_the_bullet_only_for_toby_samuel(self):
+        shown = []
+        for prop in load_properties():
+            match = match_brands(prop, load_brands(), load_category_fit())["matches"][0]
+            if ENGAGEMENT_BULLET in pitch.generate_pitch(prop, match, load_activations()):
+                shown.append(prop["name"])
+        self.assertEqual(shown, ["Toby Samuel"])  # the only one with a 4%+ rate AND 100+ per post
+
+
 class EstimateWordingTests(unittest.TestCase):
     """Estimated figures must never read like facts: they get "about" or "An estimated"."""
 
@@ -494,11 +556,12 @@ class SoftenedAgeClaimsTests(unittest.TestCase):
         self.assertEqual(plain, "- The team gives you access to customers aged 18–24, one of your key age groups.")
 
     # --- families at youth events ---
-    def test_families_claim(self):
-        soft = self.why_bullets("estimate", [45, 4, 4, 42, 5], property_type="junior_event", audience_includes_minors=True)
-        plain = self.why_bullets("calculated", [45, 4, 4, 42, 5], property_type="junior_event", audience_includes_minors=True)
-        self.assertEqual(soft, f"- {SOFT_FAMILIES_BULLET}")
-        self.assertEqual(plain, f"- {FAMILIES_BULLET}")
+    def test_the_families_claim_is_never_hedged(self):
+        # It describes the kind of event (a junior event), not the estimated age profile.
+        for confidence in ("estimate", "calculated", "published", None):
+            bullet = self.why_bullets(confidence, [45, 4, 4, 42, 5], property_type="junior_event", audience_includes_minors=True)
+            self.assertEqual(bullet, f"- {FAMILIES_BULLET}", confidence)
+            self.assertNotIn("likely", bullet, confidence)
 
     # --- only the age claims are softened ---
     def test_other_claims_are_not_hedged_by_the_age_profile(self):
@@ -525,8 +588,11 @@ class RealDataAgeClaimTests(unittest.TestCase):
         return [line for line in section(text, "## Why ").splitlines() if line.startswith("- ")][0]
 
     def test_every_real_pitch_hedges_its_age_claim_because_the_profiles_are_estimates(self):
-        for property_id in ("P01", "P02", "P03", "P04", "P05"):
+        for property_id in ("P01", "P02", "P04", "P05"):
             self.assertIn("likely", self.audience_bullet(property_id), property_id)
+
+    def test_the_junior_event_states_its_families_claim_plainly(self):
+        self.assertEqual(self.audience_bullet("P03"), f"- {FAMILIES_BULLET}")
 
     def test_the_real_data_has_no_firm_age_profile_yet(self):
         # This is why every pitch is hedged. When a profile is researched, update its confidence label
@@ -536,7 +602,6 @@ class RealDataAgeClaimTests(unittest.TestCase):
 
 
 FAMILIES_BULLET = "The event reaches families: parents and young players together."
-SOFT_FAMILIES_BULLET = "The event is likely to reach families: parents and young players together."
 UNDER_18_PHRASES = ["customers aged under 18", "access to customers aged under 18", "under 18"]
 
 
@@ -600,10 +665,9 @@ class SampleDataTests(unittest.TestCase):
                 for phrase in UNDER_18_PHRASES:
                     self.assertNotIn(phrase, text, f"{name}: found '{phrase}'")
                 if prop["audience_includes_minors"]:
-                    # Worded as "is likely to reach" while the age profile is an estimate.
-                    self.assertTrue(
-                        FAMILIES_BULLET.lower() in text or SOFT_FAMILIES_BULLET.lower() in text, name
-                    )
+                    # Stated plainly, even though the age profile is an estimate.
+                    self.assertIn(FAMILIES_BULLET.lower(), text, name)
+                    self.assertNotIn("likely to reach families", text, name)
 
     def test_every_sample_property_produces_a_clean_pitch(self):
         brands, fit, activations = load_brands(), load_category_fit(), load_activations()

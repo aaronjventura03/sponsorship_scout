@@ -71,6 +71,7 @@ CATEGORY_GOOD_FIT = 6        # category fit of 6 or more earns a "good setting" 
 CATEGORY_NATURAL_FIT = 8     # category fit of 8 or more earns a "natural home" benefit
 PURCHASING_POWER_MIN_PCT = 30  # mention purchasing power if at least this share is higher-income
 ENGAGEMENT_MIN_PCT = 4       # show the social media engagement rate only if it is at least this (it is a strength)
+ENGAGEMENT_MIN_PER_POST = 100  # the "highly engaged" benefit also needs at least this many engagements per post
 BROADCAST_MIN_TIER = 4       # show the broadcast coverage line only if the broadcast tier is at least this
 # Property types whose "audience" is Instagram followers rather than people reached at an event.
 FOLLOWER_TYPES = {"player"}
@@ -103,12 +104,21 @@ def _approximately(prop, figure, text):
     return f"about {text}" if _is_estimate(prop, figure) else text
 
 
-def _engagement_is_strong(prop):
+def _engagement_rate_is_strong(prop):
     """Could engagement be measured, and is the engagement RATE a strength worth
-    mentioning to a brand? (The rate is what a brand understands; the app scores
+    showing to a brand? (The rate is what a brand understands; the app scores
     engagements per post.)"""
     rate = prop.get("engagement_rate_pct")
     return engagement_is_measurable(prop) and isinstance(rate, (int, float)) and rate >= ENGAGEMENT_MIN_PCT
+
+
+def _engagement_is_strong(prop):
+    """Is engagement strong enough to claim "a highly engaged following"?
+    It needs BOTH a strong rate AND a real volume of engagement: a high rate on its
+    own can come from a tiny account, so at least ENGAGEMENT_MIN_PER_POST engagements
+    per post are required as well."""
+    per_post = prop.get("engagement_per_post")
+    return _engagement_rate_is_strong(prop) and isinstance(per_post, (int, float)) and per_post >= ENGAGEMENT_MIN_PER_POST
 
 
 def _band_label(part):
@@ -149,13 +159,13 @@ def _audience_benefit(prop, brand, noun):
     group") so the pitch never states a guess as a fact."""
     estimated = _age_profile_is_estimate(prop)
     likely = " likely" if estimated else ""            # "are likely the largest ..."
-    likely_to = " likely to" if estimated else ""      # "is likely to give you ..."
 
     # Events with a youth audience: talk about families. Under-18s are never described
     # as the brand's customers, and the brand is never said to get "access to" them.
+    # This is a statement about the kind of event, not about the estimated age profile,
+    # so it is stated plainly and never hedged.
     if prop.get("audience_includes_minors"):
-        verb = "is likely to reach" if estimated else "reaches"
-        return f"The {noun} {verb} families: parents and young players together."
+        return f"The {noun} reaches families: parents and young players together."
 
     # Otherwise compare the adult age groups only, for the same reason.
     adult_bands = [part for part, _label in AGE_BANDS if part != "under18"]
@@ -263,7 +273,7 @@ def generate_pitch(prop, match, activations, max_activations=MAX_ACTIVATIONS):
         lines.append(f"- Instagram followers: {audience}")
     else:
         lines.append(f"- Audience reach: {audience} people")
-    if _engagement_is_strong(prop):
+    if _engagement_rate_is_strong(prop):
         lines.append(f"- Social media engagement rate: {prop['engagement_rate_pct']}%")
     if prop["broadcast_tier"] >= BROADCAST_MIN_TIER:
         lines.append(f"- Broadcast coverage: {broadcast_description(prop['broadcast_tier'])}")

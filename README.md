@@ -189,7 +189,9 @@ For a player, rate the coverage their typical matches get.
 
 **The pitch (`pitch.py`).** A fixed template with five sections: headline, the property, why the brand,
 activation ideas and next steps. "Why the brand" holds up to three benefits, chosen in this priority order:
-audience, engagement, category fit, purchasing power. The sign-off name and title, and every threshold, are
+audience, engagement, category fit, purchasing power. The "highly engaged following" benefit needs **both** an
+engagement rate of at least 4% (`ENGAGEMENT_MIN_PCT`) **and** at least 100 engagements per post
+(`ENGAGEMENT_MIN_PER_POST`), because a high rate on its own can come from a very small account. The sign-off name and title, and every threshold, are
 named constants at the top of `pitch.py`. It starts with a short disclaimer line saying the brand is an
 illustrative category and the pitch is not a real proposal.
 
@@ -231,8 +233,10 @@ illustrative category and the pitch is not a real proposal.
 - **The pitch never presents an estimate as a fact.** An estimated audience is written "about 3,000 people" and
   an estimated income share "An estimated 40% of the audience is in higher-income brackets". Claims about the
   audience's age mix are softened while the age profile is an estimate: "Your core customers, aged 35-54, are
-  *likely* the tournament's largest audience group", "is *likely to* reach families". Once an age profile is
-  researched and its confidence label changed to published or calculated, the claim is stated plainly.
+  *likely* the tournament's largest audience group". Once an age profile is researched and its confidence label
+  changed to published or calculated, the claim is stated plainly. The one exception is the families line for
+  junior events ("The event reaches families: parents and young players together."), which describes the kind of
+  event rather than the estimated age profile, so it is always stated plainly.
 - **Age profiles are flagged as unresearched** in the data and in the app, because brand matching depends on them.
 - **Players and events share one audience scale.** A player's audience is Instagram followers and an event's is
   attendance plus TV audience. They are different things, so comparing them directly is a simplification.

@@ -220,7 +220,7 @@ which brand the pitch is written for.
    banner always visible. Streamlit is installed in a private `.venv` folder inside the project.
    Run it with: `.venv/bin/streamlit run app.py` (from the `sponsorship_scout` folder).
 7. Final review: (done) all 5 properties run end to end through scoring, matching, pitch and
-   the app; the junior event excludes the age-restricted brand; 236 automated tests pass (after the final changes)
+   the app; the junior event excludes the age-restricted brand; 248 automated tests pass (after the final changes)
    (23 of them drive the app and need Streamlit); README written.
 
 ## Changes agreed after the first plan
@@ -294,6 +294,12 @@ which brand the pitch is written for.
     ("are likely the tournament's largest audience group", "is likely to reach families") wherever a
     property's age profile is an estimate. Published or calculated profiles are stated plainly. All five
     properties currently have estimated profiles, so every pitch is hedged.
+
+22. Two small pitch changes: the families bullet for junior events is always stated plainly (it describes
+    the kind of event, not the estimated age profile), and the "highly engaged following" bullet now needs
+    both an engagement rate of at least `ENGAGEMENT_MIN_PCT` (4%) and at least `ENGAGEMENT_MIN_PER_POST`
+    (100) engagements per post. The rate line in the property stats still follows the rate alone. Of the
+    current five properties only Toby Samuel gets the bullet.
 
 ## Open items
 
