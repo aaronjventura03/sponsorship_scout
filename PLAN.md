@@ -224,7 +224,7 @@ which brand the pitch is written for.
    banner always visible. Streamlit is installed in a private `.venv` folder inside the project.
    Run it with: `.venv/bin/streamlit run app.py` (from the `sponsorship_scout` folder).
 7. Final review: (done) all 5 properties run end to end through scoring, matching, pitch and
-   the app; the junior event excludes the age-restricted brand; 505 automated tests pass (after version 3.1)
+   the app; the junior event excludes the age-restricted brand; 519 automated tests pass (after version 3.1)
    (23 of them drive the app and need Streamlit); README written.
 
 ## Changes agreed after the first plan
@@ -360,10 +360,13 @@ What was built:
   Queen Mary, which have no Wikipedia page (checked 3 October 2026).
 - A property with no page has a blank audience in this mode: "not measured", its weight shared across its other
   factors. A failed download is reported and the standard scores are shown (never confused with "no page").
+- A **"Factors measured"** column in the ranking table (for example "4 of 5") shows how much evidence each score
+  rests on, because a property scored on fewer factors is less certain (in like-for-like mode Roehampton is "3 of 5"
+  and outranks the "5 of 5" Ilkley).
 - The analysis shows the page views next to the standard figure; a table lists every property's page views, with
   source links. A nudge appears when a lookup with a page-view audience is ranked in standard mode.
 - The **pitch ignores the switch** and keeps each property's own best figures.
-- Tests: 434 grew to 505, none using the internet. A deliberate break of the feature made 10 of them fail.
+- Tests: 434 grew to 519, none using the internet. A deliberate break of the feature made 10 of them fail.
 
 On the live figures (3 October 2026) the switch gives: Queen's 76.9 (was 82.2), Toby Samuel 57.8 (51.5),
 Roehampton 47.3 (41.7), Ilkley 46.5 (49.3), Queen Mary 12.5 (10.3). Roehampton overtakes Ilkley because it is

@@ -33,7 +33,7 @@ QUEENS = "Queen's Club Championships"
 QUEENS_LABEL = "Queen's Club Championships (Wikipedia lookup)"
 QUEENS_YEAR_OF_VIEWS = sum(fixtures.CATALOGUE[QUEENS]["views"])  # the fake page views for a whole year
 FORM_BUTTON = "Score this property"
-RANKING_COLUMNS = ["Rank", "Property", "Type", "Score"]
+RANKING_COLUMNS = ["Rank", "Property", "Type", "Score", "Factors measured"]
 
 
 def button(at, label):
@@ -41,7 +41,7 @@ def button(at, label):
 
 
 def ranking(at):
-    """The ranking table (the one with Rank, Property, Type and Score columns)."""
+    """The ranking table (the one with Rank, Property, Type, Score and Factors measured columns)."""
     return next(t.value for t in at.dataframe if list(t.value.columns) == RANKING_COLUMNS)
 
 

@@ -318,6 +318,123 @@ class LookupFairnessTests(lookup_tests.LookupTestCase):
         self.assertEqual(len(at.exception), 0)
 
 
+def factors_measured(at):
+    """The ranking table's "Factors measured" column, as {property name: text such as '4 of 5'}."""
+    table = lookup_tests.ranking(at)
+    return dict(zip(table["Property"], table["Factors measured"]))
+
+
+@SKIP
+class FactorsMeasuredTests(lookup_tests.LookupTestCase):
+    """The ranking says how many of the five factors each score rests on."""
+
+    STANDARD = {
+        "Queen's (HSBC Championships)": "5 of 5",
+        "Lexus Ilkley Open": "5 of 5",
+        "Lexus British Open Roehampton (ITF J300)": "4 of 5",  # no social account to measure
+        "Queen Mary Tennis Club (BUCS)": "5 of 5",
+        "Toby Samuel": "5 of 5",
+    }
+    LIKE_FOR_LIKE = {
+        "Queen's (HSBC Championships)": "5 of 5",
+        "Lexus Ilkley Open": "5 of 5",
+        "Lexus British Open Roehampton (ITF J300)": "3 of 5",  # no Wikipedia page, and no social account
+        "Queen Mary Tennis Club (BUCS)": "4 of 5",             # no Wikipedia page
+        "Toby Samuel": "5 of 5",
+    }
+
+    def test_the_column_is_there_and_reads_n_of_5(self):
+        counts = factors_measured(self.start())
+        self.assertEqual(len(counts), 5)
+        for text in counts.values():
+            self.assertRegex(text, r"^[0-5] of 5$")
+
+    def test_the_standard_counts(self):
+        self.assertEqual(factors_measured(self.start()), self.STANDARD)
+
+    def test_the_like_for_like_counts_drop_for_properties_with_no_wikipedia_page(self):
+        at = self.start()
+        toggle(at).set_value(True).run()
+        self.assertEqual(factors_measured(at), self.LIKE_FOR_LIKE)
+
+    def test_switching_back_restores_the_standard_counts(self):
+        at = self.start()
+        toggle(at).set_value(True).run()
+        toggle(at).set_value(False).run()
+        self.assertEqual(factors_measured(at), self.STANDARD)
+
+    def test_the_counts_agree_with_the_scoring_code(self):
+        for properties in (load_properties(), comparison.like_for_like(load_properties(), fixture_views())):
+            for prop in properties:
+                expected = 5 - len(scoring.score_property(prop)["unmeasured"])
+                expected_text = f"{expected} of 5"
+                at = self.start()
+                if prop.get("like_for_like"):
+                    toggle(at).set_value(True).run()
+                self.assertEqual(factors_measured(at)[property_label(prop)], expected_text, prop["name"])
+
+    def test_the_count_agrees_with_what_the_analysis_shows_as_not_measured(self):
+        for like_for_like in (False, True):
+            at = self.start()
+            if like_for_like:
+                toggle(at).set_value(True).run()
+            for prop in load_properties():
+                name = property_label(prop)
+                at.sidebar.selectbox(key="property_choice").select(name).run()
+                not_measured = (lookup_tests.breakdown(at)["Confidence"] == "Not measured").sum()
+                self.assertEqual(factors_measured(at)[name], f"{5 - not_measured} of 5", (name, like_for_like))
+
+    def test_a_less_certain_score_is_visible_next_to_its_score(self):
+        # Roehampton outranks Ilkley in like-for-like mode, and the table says why that is less certain.
+        at = self.start()
+        toggle(at).set_value(True).run()
+        table = lookup_tests.ranking(at).set_index("Property")
+        self.assertGreater(table.loc["Lexus British Open Roehampton (ITF J300)", "Score"], table.loc["Lexus Ilkley Open", "Score"])
+        self.assertEqual(table.loc["Lexus British Open Roehampton (ITF J300)", "Factors measured"], "3 of 5")
+        self.assertEqual(table.loc["Lexus Ilkley Open", "Factors measured"], "5 of 5")
+
+    def test_the_sliders_do_not_change_what_could_be_measured(self):
+        at = self.start()
+        at.sidebar.slider[list(scoring.FACTOR_LABELS).index("audience")].set_value(0)
+        at.sidebar.slider[list(scoring.FACTOR_LABELS).index("prestige")].set_value(100).run()
+        self.assertEqual(factors_measured(at), self.STANDARD)
+
+    def test_the_column_survives_the_type_filter(self):
+        at = self.start()
+        at.selectbox(key="type_filter").select("junior_event").run()
+        self.assertEqual(factors_measured(at), {"Lexus British Open Roehampton (ITF J300)": "4 of 5"})
+
+    def test_a_lookup_with_every_figure_counts_five(self):
+        at = self.flow(lookup_tests.QUEENS)
+        prefix = self.prefix(at)
+        at.number_input(key=prefix + "engagement_value").set_value(900)
+        self.submit(self.fill_in(at))
+        self.assertEqual(factors_measured(at)[lookup_tests.QUEENS_LABEL], "5 of 5")
+
+    def test_a_lookup_missing_the_engagement_figure_counts_four(self):
+        at = self.submit(self.fill_in(self.flow(lookup_tests.QUEENS)))  # engagement left blank
+        self.assertEqual(factors_measured(at)[lookup_tests.QUEENS_LABEL], "4 of 5")
+
+    def test_a_lookup_with_only_the_page_views_counts_one(self):
+        at = self.submit(self.flow(lookup_tests.QUEENS))  # the audience is the only figure filled in
+        self.assertEqual(factors_measured(at)[lookup_tests.QUEENS_LABEL], "1 of 5")
+
+    def test_a_lookup_with_nothing_filled_in_counts_zero(self):
+        at = self.flow("tiny club")
+        at.selectbox(key="wf_type|Tiny Club").select("player").run()
+        self.submit(at)
+        self.assertEqual(factors_measured(at)["Tiny Club (Wikipedia lookup)"], "0 of 5")
+
+    def test_a_lookup_with_a_page_that_has_no_views_has_no_audience_in_either_mode(self):
+        at = self.flow("tiny club")  # a real page, but Wikipedia has no page-view data for it
+        at.selectbox(key="wf_type|Tiny Club").select("player").run()
+        self.fill_in(at)
+        self.submit(at)
+        self.assertEqual(factors_measured(at)["Tiny Club (Wikipedia lookup)"], "3 of 5")  # prestige, broadcast, income
+        toggle(at).set_value(True).run()
+        self.assertEqual(factors_measured(at)["Tiny Club (Wikipedia lookup)"], "3 of 5")  # still no audience
+
+
 @SKIP
 class WikipediaDownTests(unittest.TestCase):
     """If Wikipedia cannot be reached, the app must say so and show the standard scores."""

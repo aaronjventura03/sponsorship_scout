@@ -242,14 +242,16 @@ labels = rank_labels([result["total"] for _, result in ranked])  # ranks count w
 if type_filter != ALL_TYPES:
     st.caption(f"Showing {type_label(type_filter).lower()} properties only ({len(ranked)}). Ranks count within this type.")
 
-# The ranking shows only the headline numbers. The factor-by-factor breakdown
-# for the chosen property is in the Analysis section below.
+# The ranking shows only the headline numbers, plus how many of the five factors each score rests on.
+# A score built on fewer factors is less certain. The factor-by-factor breakdown for the chosen
+# property is in the Analysis section below.
 table = [
     {
         "Rank": label,
         "Property": property_label(prop),
         "Type": type_label(prop["property_type"]),
         "Score": result["total"],
+        "Factors measured": f"{len(result['factors']) - len(result['unmeasured'])} of {len(result['factors'])}",
     }
     for label, (prop, result) in zip(labels, ranked)
 ]
@@ -263,7 +265,15 @@ st.dataframe(
     pd.DataFrame(table).style.apply(highlight_chosen, axis=1),
     hide_index=True,
     width="stretch",
-    column_config={"Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f")},
+    column_config={
+        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.1f"),
+        "Factors measured": st.column_config.TextColumn(
+            "Factors measured",
+            help="How many of the five score factors could be measured for this property. A factor that could not "
+                 "be measured is left out and its weight is shared across the others, so fewer than 5 means the "
+                 "score rests on less evidence and is less certain.",
+        ),
+    },
 )
 
 # ===========================================================================

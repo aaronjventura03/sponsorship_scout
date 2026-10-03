@@ -106,9 +106,9 @@ class AppLayoutTests(unittest.TestCase):
         self.assertEqual(len(scores), len(load_properties()))
         self.assertEqual(scores, sorted(scores, reverse=True))
 
-    def test_ranking_table_shows_only_rank_property_type_and_score(self):
+    def test_ranking_table_shows_rank_property_type_score_and_factors_measured(self):
         table = start_app().dataframe[0].value
-        self.assertEqual(list(table.columns), ["Rank", "Property", "Type", "Score"])
+        self.assertEqual(list(table.columns), ["Rank", "Property", "Type", "Score", "Factors measured"])
 
     def test_property_types_are_capitalised(self):
         types = set(start_app().dataframe[0].value["Type"])

@@ -65,7 +65,9 @@ research, update the `EXPECTED` table in `RealDataTests` to match.
 - **Look up on Wikipedia:** type a tournament or player name, fetch its Wikipedia details, and score it
   (see "Looking up a property on Wikipedia" below).
 - **Property ranking:** all properties ranked by score, with the chosen one tinted. It re-sorts
-  live as you move the sliders. The **"Compare like for like"** switch above the table re-scores every property's
+  live as you move the sliders. The **"Factors measured"** column (for example "4 of 5") says how many of the five
+  score factors each score rests on: a factor that could not be measured is left out and its weight shared across
+  the others, so fewer than 5 means a less certain score. The **"Compare like for like"** switch above the table re-scores every property's
   audience on the same measure (see below). The **"Rank one property type at a time"** filter shows
   only premium tournaments, only players, and so on, with ranks counted within that type. Properties from
   a Wikipedia lookup appear in the ranking too, marked "(Wikipedia lookup)".
