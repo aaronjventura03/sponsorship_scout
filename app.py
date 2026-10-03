@@ -20,7 +20,9 @@ import pandas as pd  # installed together with Streamlit; used here to tint the 
 import streamlit as st
 
 from data_loader import load_activations, load_brands, load_category_fit, load_properties
+import comparison
 import lookup_ui
+import wikipedia_lookup as wiki
 from display import clean_name, property_label, type_label
 from matching import MATCH_WEIGHTS, joint_first, match_brands
 from pitch import FOLLOWER_TYPES, generate_pitch, in_words
@@ -109,12 +111,33 @@ lookups = list(st.session_state.get("custom_properties", {}).values())
 all_properties = properties + lookups
 
 # ===========================================================================
+# Like-for-like mode (optional): every property's audience on the SAME measure
+# ===========================================================================
+# When the switch in the ranking section is on, every property's audience is its Wikipedia page
+# views, so a Wikipedia lookup can be ranked fairly against the saved properties. The scoring
+# below then uses COPIES of the properties (`scored_properties`); the saved data never changes.
+# The pitch always uses the property's own best figures (`all_properties`), not this measure.
+like_for_like_on = bool(st.session_state.get("like_for_like", False))
+pageview_cache = st.session_state.setdefault("pageview_cache", {})  # page title -> page views (kept for the session)
+comparison_problems = []
+if like_for_like_on:
+    with st.spinner("Fetching Wikipedia page views for every property..."):
+        comparison_problems = comparison.ensure_page_views(
+            pageview_cache, [p.get("wikipedia_title") for p in all_properties]
+        )
+# If Wikipedia could not be reached, fall back to the standard scores rather than score on partial data.
+comparing = like_for_like_on and not comparison_problems
+scored_properties = comparison.like_for_like(all_properties, pageview_cache) if comparing else all_properties
+
+# ===========================================================================
 # Sidebar: property picker and weight sliders
 # ===========================================================================
 with st.sidebar:
     st.header("Property")
     names = [property_label(p) for p in all_properties]  # "Placeholder" is hidden from displayed names
-    chosen = all_properties[names.index(st.selectbox("Choose a tennis property", names, key="property_choice"))]
+    chosen_index = names.index(st.selectbox("Choose a tennis property", names, key="property_choice"))
+    chosen = scored_properties[chosen_index]          # used for the score and the analysis
+    chosen_original = all_properties[chosen_index]    # used for the pitch: its own best figures
 
     st.header("Score weights")
     st.caption(
@@ -144,9 +167,64 @@ with st.sidebar:
 st.header("Property ranking")
 st.caption("Commercial value out of 100. The table updates as you move the sliders.")
 
+
+def audience_text(value, source, property_type):
+    """An audience figure in plain words, matching what the figure actually is."""
+    if not (isinstance(value, (int, float)) and not isinstance(value, bool)):
+        return "Not provided"
+    if str(source).startswith("Wikipedia page views"):
+        return f"{value:,} Wikipedia page views a year (a proxy for public interest)"
+    if property_type in FOLLOWER_TYPES:
+        return f"{value:,} Instagram followers"
+    return f"{in_words(value)} people"
+
+
+st.toggle(
+    "Compare like for like: use Wikipedia page views as every property's audience",
+    key="like_for_like",
+    help="Each property's normal audience figure is a different kind of number (attendance plus TV audience, "
+         "Instagram followers, a guess). This switch scores every property's audience from its Wikipedia page "
+         "views instead, so a Wikipedia lookup can be ranked fairly against the saved properties.",
+)
+if comparison_problems:
+    st.warning(
+        "Could not fetch Wikipedia page views, so the standard scores are shown instead. "
+        + " ".join(comparison_problems)
+    )
+elif comparing:
+    st.info(
+        "**Like-for-like mode.** Every property's audience is now its Wikipedia page views over the last 12 "
+        "complete months. A property with no Wikipedia page has no audience figure here, so its audience is "
+        "not measured and that weight is shared across its other factors. The saved figures are unchanged: "
+        "switch this off to see the standard scores. The pitch still uses each property's own best figures."
+    )
+    with st.expander("Audience on the same measure"):
+        comparison_rows = []
+        for original in all_properties:
+            title = original.get("wikipedia_title") or ""
+            views = pageview_cache.get(title) if title else None
+            comparison_rows.append({
+                "Property": property_label(original),
+                "Wikipedia page": title or "No Wikipedia page",
+                "Page views a year": f"{views['annual_estimate']:,}" if views else ("No page-view data" if title else "-"),
+                "Source": views["source_url"] if views else (wiki.page_url(title) if title else None),
+                "Standard audience figure (not used in this mode)": audience_text(
+                    original.get("annual_audience_reach"), original.get("audience_source"), original["property_type"]
+                ),
+            })
+        st.dataframe(
+            comparison_rows, hide_index=True, width="stretch",
+            column_config={"Source": st.column_config.LinkColumn("Source")},
+        )
+elif any(str(p.get("audience_source", "")).startswith("Wikipedia page views") for p in all_properties):
+    st.caption(
+        "A Wikipedia lookup in this ranking uses page views as its audience, which is not comparable with "
+        "the saved properties' attendance and TV figures. Switch on 'Compare like for like' to rank them on the same measure."
+    )
+
 # Rank one property type at a time, or all of them together.
 ALL_TYPES = "All types"
-type_options = [ALL_TYPES] + list(dict.fromkeys(p["property_type"] for p in all_properties))
+type_options = [ALL_TYPES] + list(dict.fromkeys(p["property_type"] for p in scored_properties))
 if st.session_state.get("type_filter") not in type_options:
     st.session_state["type_filter"] = ALL_TYPES  # for example after a lookup is removed
 type_filter = st.selectbox(
@@ -157,7 +235,7 @@ type_filter = st.selectbox(
 )
 
 ranked = [
-    pair for pair in rank_properties(all_properties, weights)
+    pair for pair in rank_properties(scored_properties, weights)
     if type_filter == ALL_TYPES or pair[0]["property_type"] == type_filter
 ]
 labels = rank_labels([result["total"] for _, result in ranked])  # ranks count within the chosen type
@@ -201,6 +279,8 @@ if chosen.get("from_wikipedia"):
     )
 
 # --- Score breakdown -------------------------------------------------------
+if comparing:
+    st.caption("Scored in like-for-like mode: the audience is this property's Wikipedia page views, the same measure as every other property.")
 result = score_property(chosen, weights)
 st.subheader("Commercial score")
 st.metric("Out of 100", f"{result['total']:.1f}")
@@ -212,14 +292,13 @@ def is_number(value):
 
 
 audience = chosen["annual_audience_reach"]
-if not is_number(audience):
-    audience_figure = "Not provided"
-elif str(chosen.get("audience_source", "")).startswith("Wikipedia page views"):
-    audience_figure = f"{audience:,} Wikipedia page views a year (a proxy for public interest)"
-elif chosen["property_type"] in FOLLOWER_TYPES:
-    audience_figure = f"{audience:,} Instagram followers"
-else:
-    audience_figure = f"{in_words(audience)} people"
+audience_figure = audience_text(audience, chosen.get("audience_source"), chosen["property_type"])
+if chosen.get("like_for_like"):
+    if not is_number(audience):
+        audience_figure = "No Wikipedia page views available"
+    original = chosen.get("original_audience_reach")
+    if is_number(original):
+        audience_figure += f" · standard figure: {audience_text(original, chosen.get('original_audience_source'), chosen['property_type'])}"
 if engagement_is_measurable(chosen):
     # Scored on engagements per post. The rate is shown as context only.
     engagement_figure = f"{chosen['engagement_per_post']:,} per post (median likes + comments)"
@@ -366,7 +445,7 @@ chosen_brand_id = st.selectbox(
 )
 
 if chosen_brand_id is not None:
-    pitch_text = generate_pitch(chosen, brand_names[chosen_brand_id], activations)
+    pitch_text = generate_pitch(chosen_original, brand_names[chosen_brand_id], activations)  # its own best figures
     with st.container(border=True):
         st.markdown(demote_headings(pitch_text))  # smaller headings on screen; the download is unchanged
     st.download_button(

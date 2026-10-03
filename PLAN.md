@@ -201,6 +201,7 @@ which brand the pitch is written for.
 | `wikipedia_lookup.py` | Looks up a name on Wikipedia (the only code that uses the internet) |
 | `custom_property.py` | Turns the lookup form into a property record (sourced/estimated checks) |
 | `lookup_ui.py` | The "Look up on Wikipedia" section of the app |
+| `comparison.py` | The "compare like for like" mode (page views as every property's audience) |
 | `data/` | The four editable CSV files |
 | `tests/` | Automated tests (data, scoring, matching, pitch, display, app) |
 | `show_scores.py`, `show_matches.py`, `show_pitch.py` | Command-line printouts for checking results |
@@ -223,7 +224,7 @@ which brand the pitch is written for.
    banner always visible. Streamlit is installed in a private `.venv` folder inside the project.
    Run it with: `.venv/bin/streamlit run app.py` (from the `sponsorship_scout` folder).
 7. Final review: (done) all 5 properties run end to end through scoring, matching, pitch and
-   the app; the junior event excludes the age-restricted brand; 434 automated tests pass (after version 3)
+   the app; the junior event excludes the age-restricted brand; 505 automated tests pass (after version 3.1)
    (23 of them drive the app and need Streamlit); README written.
 
 ## Changes agreed after the first plan
@@ -337,6 +338,37 @@ What was built:
 
 Decisions: page views are offered as the audience figure (ticked by default, easy to untick) because they
 measure interest, not attendance. Lookups are not saved automatically. Only English Wikipedia is searched.
+
+## Version 3.1: comparing like for like
+
+Problem: a Wikipedia lookup's audience (page views) is not comparable with the saved properties' audience
+(attendance + TV, followers, guesses).
+
+Options considered: (A) score every property's audience from page views; (B) leave page views out of the
+score; (C) convert page views to "audience equivalents" with an exchange rate; (D) make A an optional switch.
+C was rejected (the saved properties give contradictory rates: about 12 for Queen's, about 0.05 for Toby Samuel).
+D was built.
+
+What was built:
+
+- A **"Compare like for like"** switch above the ranking table (off by default). When on, every property's
+  audience is its Wikipedia page views over the same last 12 complete months, so a lookup ranks fairly against
+  the saved properties. `comparison.py` fetches the page views (once per session, cached) and returns COPIES of the
+  properties with the audience swapped; the scoring, ranking, analysis and type filter then run unchanged.
+- A new **`wikipedia_title`** column in `properties.csv`: Queen's Club Championships, Ilkley Trophy (the Lexus
+  Ilkley Open's page; "Ilkley Open" is a different, historic event), Toby Samuel; blank for Roehampton and
+  Queen Mary, which have no Wikipedia page (checked 3 October 2026).
+- A property with no page has a blank audience in this mode: "not measured", its weight shared across its other
+  factors. A failed download is reported and the standard scores are shown (never confused with "no page").
+- The analysis shows the page views next to the standard figure; a table lists every property's page views, with
+  source links. A nudge appears when a lookup with a page-view audience is ranked in standard mode.
+- The **pitch ignores the switch** and keeps each property's own best figures.
+- Tests: 434 grew to 505, none using the internet. A deliberate break of the feature made 10 of them fail.
+
+On the live figures (3 October 2026) the switch gives: Queen's 76.9 (was 82.2), Toby Samuel 57.8 (51.5),
+Roehampton 47.3 (41.7), Ilkley 46.5 (49.3), Queen Mary 12.5 (10.3). Roehampton overtakes Ilkley because it is
+scored on only three factors (audience and engagement are both unmeasured), which shows the limit of the
+"share the weight" rule.
 
 ## Open items
 

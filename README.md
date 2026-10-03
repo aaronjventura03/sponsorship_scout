@@ -65,7 +65,8 @@ research, update the `EXPECTED` table in `RealDataTests` to match.
 - **Look up on Wikipedia:** type a tournament or player name, fetch its Wikipedia details, and score it
   (see "Looking up a property on Wikipedia" below).
 - **Property ranking:** all properties ranked by score, with the chosen one tinted. It re-sorts
-  live as you move the sliders. The **"Rank one property type at a time"** filter shows
+  live as you move the sliders. The **"Compare like for like"** switch above the table re-scores every property's
+  audience on the same measure (see below). The **"Rank one property type at a time"** filter shows
   only premium tournaments, only players, and so on, with ranks counted within that type. Properties from
   a Wikipedia lookup appear in the ranking too, marked "(Wikipedia lookup)".
 - **Analysis:** the chosen property's score breakdown with a **confidence label next to each figure**,
@@ -102,7 +103,8 @@ of the app.
 - **Page views are not attendance.** They measure online interest. They fill the audience figure by default
   (the checkbox "Use Wikipedia page views as the audience figure" is ticked), they are labelled as a proxy, and
   the pitch describes them as "Wikipedia page views a year", never as "people" or "followers". Untick the box or
-  overwrite the figure if you know the real attendance or audience.
+  overwrite the figure if you know the real attendance or audience. To rank a lookup fairly against the saved
+  properties, use the "Compare like for like" switch (next section).
 - **Nothing is guessed for you.** Anything Wikipedia does not have starts blank. A blank figure is "not measured":
   it is left out of the score and its weight is shared across the other factors, as for Roehampton's engagement.
   The one starting value that is not from Wikipedia is the audience age profile, which starts as a default for the
@@ -121,6 +123,37 @@ of the app.
 internet; `custom_property.py` checks the form and turns it into the same kind of record as a row of
 `properties.csv`; `lookup_ui.py` is the section of the app you see. The tests replace Wikipedia with stand-ins, so
 they never use the internet.
+
+---
+
+## Comparing like for like
+
+A property's normal audience figure is whatever could be found for it: attendance plus a TV audience for
+Queen's, Instagram followers for a player, a rough guess for a small event. A Wikipedia lookup only has page
+views. Those are different things, so ranking them side by side is not fair.
+
+The **"Compare like for like"** switch above the ranking table fixes this. When it is on:
+
+- **Every property's audience is its Wikipedia page views** over the same last 12 complete months, fetched in one
+  go (once per session; the app remembers them). A looked-up property uses the same measure even if you typed a
+  real attendance figure.
+- **A property with no Wikipedia page** has no audience figure on this basis. Its audience is "not measured" and
+  that weight is shared across its other factors, exactly as for Roehampton's engagement. Of the five saved
+  properties, Roehampton's junior event and the Queen Mary club have no page (checked 3 October 2026).
+- **Nothing saved changes.** Switch it off and the standard scores come back exactly. The pitch always uses a
+  property's own best figures (real attendance, real followers), never this comparison measure, because a brand
+  should read real numbers.
+- **If Wikipedia cannot be reached,** the app says so and shows the standard scores rather than score on partial data.
+
+Each saved property records its Wikipedia page in the `wikipedia_title` column of `properties.csv` (use the page's
+exact title, not a redirect; leave it blank if there is no page). For example, the Lexus Ilkley Open's page is
+called "Ilkley Trophy", while "Ilkley Open" is a different, historic event.
+
+**What to keep in mind.** Page views are a fair *common* yardstick, but they are still not audience. They favour
+well-known individuals and newsworthy moments over events with big TV audiences, and they spike around news (a
+player's ranking surge, Wimbledon fortnight). On the live figures, Toby Samuel's page gets about 119,000 views a
+year against Queen's 158,000, even though Queen's reaches roughly 12 times as many real people. Use the switch to
+compare like with like, not to replace the standard scores.
 
 ---
 
@@ -336,6 +369,15 @@ illustrative category and the pitch is not a real proposal.
   with the saved properties and gets the same honesty rules (confidence labels, "not measured", hedged wording).
 - **It is not saved.** Writing user-typed figures into your data files automatically would be easy to get wrong.
 
+**Comparing like for like**
+
+- **A switch, off by default,** because replacing every property's audience with page views throws away real
+  attendance and TV figures. You choose when fairness matters more than precision.
+- **No exchange rate between page views and audience.** It was considered and rejected: Queen's real audience is
+  about 12 times its page views, while Toby Samuel's is about 0.05 times, so no stable conversion exists.
+- **A missing page means "not measured", never zero.** A failed download is never mistaken for a missing page.
+- **The pitch ignores the switch,** so a brand never reads a page-view count where an attendance figure exists.
+
 **The build**
 
 - **Plain Python, CSV files and no scraping or paid services,** so it runs anywhere and every number can be
@@ -366,6 +408,7 @@ single line in `app.py` that calls `generate_pitch`. Scoring, matching and the d
 | `wikipedia_lookup.py` | looks up a name on Wikipedia (the only code that uses the internet) |
 | `custom_property.py` | turns the lookup form into a property record, with sourced/estimated checks |
 | `lookup_ui.py` | the "Look up on Wikipedia" section of the app |
+| `comparison.py` | the "compare like for like" mode: fetches page views and swaps every audience for them |
 | `.streamlit/config.toml` | app settings (reload automatically when files are saved) |
 | `requirements.txt` | the packages to install (Streamlit and watchdog) |
 | `tests/` | automated tests (data, scoring, matching, pitch, display, app) |
@@ -380,7 +423,9 @@ single line in `app.py` that calls `generate_pitch`. Scoring, matching and the d
   the audiences of Roehampton and the university club). The confidence labels say which.
 - Roehampton is scored on four factors, not five, because it has no social account to measure.
 - A Wikipedia lookup is only as good as Wikipedia's page and the figures you add. Its page-view audience is a
-  proxy for online interest, so it is not directly comparable with an attendance-plus-TV figure.
+  proxy for online interest, so it is not directly comparable with an attendance-plus-TV figure. The "compare
+  like for like" switch puts everyone on page views, but that measure favours individuals and news over TV events,
+  and a property with no page is scored on fewer factors, which makes its score less certain.
 - The audience age profiles are unresearched judgements, so brand matching is only as good as those guesses.
   The pitch words its age-mix claims as "likely" for that reason.
 - Brands are illustrative categories, so matches show which kind of brand fits, not which company.

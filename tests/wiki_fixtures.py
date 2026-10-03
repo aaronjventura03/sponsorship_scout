@@ -83,6 +83,13 @@ CATALOGUE = {
         "wikitext": TOBY_WIKITEXT,
         "views": [1000] * 12,  # average 1,000, so a year is 12,000
     },
+    "Ilkley Trophy": {  # the Wikipedia page of the Lexus Ilkley Open (a saved property)
+        "type": "standard",
+        "description": "Tennis tournament on grass courts",
+        "extract": "The Lexus Ilkley Open is a professional tennis tournament played on grass courts.",
+        "wikitext": "",
+        "views": [400] * 12,  # average 400, so a year is 4,800
+    },
     "Mercury": {
         "type": "disambiguation",
         "description": "Topics referred to by the same term",

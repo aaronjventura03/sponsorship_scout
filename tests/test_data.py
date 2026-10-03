@@ -229,6 +229,24 @@ class RealDataTests(unittest.TestCase):
         for prop in by_id.values():
             self.assertEqual(prop["high_income_confidence"], "estimate", prop["id"])
 
+    def test_each_saved_property_records_its_wikipedia_page(self):
+        titles = {p["id"]: p["wikipedia_title"] for p in load_properties()}
+        self.assertEqual(titles, {
+            "P01": "Queen's Club Championships",
+            "P02": "Ilkley Trophy",  # the Lexus Ilkley Open's page; "Ilkley Open" is a different, historic event
+            "P03": "",               # no Wikipedia page (checked 3 October 2026)
+            "P04": "",               # no Wikipedia page (checked 3 October 2026)
+            "P05": "Toby Samuel",
+        })
+
+    def test_wikipedia_titles_are_clean_and_unique(self):
+        filled = [p["wikipedia_title"] for p in load_properties() if p["wikipedia_title"]]
+        self.assertEqual(len(filled), len(set(filled)))
+        for title in filled:
+            self.assertEqual(title, title.strip())
+            self.assertNotIn("_", title)       # a title with spaces, as Wikipedia writes it
+            self.assertNotIn("wikipedia.org", title)  # a title, not a web address
+
     def test_financial_services_fits_a_premium_tournament_at_9(self):
         rows = {row["category"]: row for row in load_category_fit()}
         self.assertEqual(rows["financial_services"]["premium_tournament"], 9)
