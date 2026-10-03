@@ -151,6 +151,11 @@ class AppLayoutTests(unittest.TestCase):
         self.assertGreaterEqual(len([m for m in at.markdown if " · match score" in m.value]), 3)
 
 
+def pandas_isna(value):
+    """True for None or NaN (how an empty table cell comes back)."""
+    return value is None or value != value
+
+
 def choose_property(at, property_id):
     prop = next(p for p in load_properties() if p["id"] == property_id)
     at.sidebar.selectbox[0].select(clean_name(prop["name"])).run()
@@ -176,14 +181,66 @@ class ConfidenceDisplayTests(unittest.TestCase):
         for prop in load_properties():
             table = self.breakdown(choose_property(start_app(), prop["id"]))
             for factor_label, confidence in table["Confidence"].items():
-                self.assertIn(confidence.lower().split(" ")[0], ("published", "calculated", "estimate", "low"), (prop["id"], factor_label))
+                self.assertIn(confidence.lower().split(" ")[0], ("published", "calculated", "estimate", "not"), (prop["id"], factor_label))
             self.assertEqual(table.loc["Purchasing power", "Confidence"], "Estimate", prop["id"])
 
-    def test_an_unmeasurable_engagement_is_flagged_as_low_confidence_with_the_neutral_score(self):
+    def test_engagement_shows_per_post_with_the_rate_as_context(self):
+        figure = self.breakdown(start_app()).loc["Social engagement", "Figure"]
+        self.assertEqual(figure, "2,025 per post (median likes + comments) · rate 2.9% of 70,100 followers")
+
+    def test_the_score_uses_engagements_per_post_not_the_rate(self):
+        # Queen's has a low rate (2.9%) but the most engagements per post, so it scores well on engagement.
+        table = self.breakdown(start_app())
+        self.assertAlmostEqual(table.loc["Social engagement", "Score (0-10)"], 7.7, places=1)
+        toby = self.breakdown(choose_property(start_app(), "P05"))  # a 13.8% rate, 878 per post
+        self.assertAlmostEqual(toby.loc["Social engagement", "Score (0-10)"], 6.5, places=1)
+        self.assertGreater(table.loc["Social engagement", "Score (0-10)"], toby.loc["Social engagement", "Score (0-10)"])
+
+    def test_an_unmeasurable_factor_is_left_out_and_labelled_not_measured(self):
         table = self.breakdown(choose_property(start_app(), "P03"))  # Roehampton: no dedicated account
-        self.assertEqual(table.loc["Social engagement", "Confidence"], "Low confidence (neutral score used)")
-        self.assertEqual(table.loc["Social engagement", "Score (0-10)"], 5.0)
-        self.assertIn("Not measurable", table.loc["Social engagement", "Figure"])
+        self.assertEqual(table.loc["Social engagement", "Confidence"], "Not measured")
+        self.assertEqual(table.loc["Social engagement", "Figure"], "Not measurable (no dedicated account)")
+        self.assertTrue(pandas_isna(table.loc["Social engagement", "Score (0-10)"]))  # no score, not a neutral 5
+        self.assertEqual(table.loc["Social engagement", "Points"], 0)
+        self.assertEqual(table.loc["Social engagement", "Weight"], 0)
+
+    def test_the_weights_set_and_the_weights_used_are_both_shown_when_one_is_redistributed(self):
+        table = self.breakdown(choose_property(start_app(), "P03"))
+        self.assertEqual(list(table.columns), ["Figure", "Confidence", "Score (0-10)", "Weight set", "Weight", "Points"])
+        self.assertEqual(table.loc["Social engagement", "Weight set"], 20)
+        self.assertEqual(table.loc["Audience size", "Weight set"], 25)
+        self.assertAlmostEqual(table.loc["Audience size", "Weight"], 31.2, places=1)  # 25 x 100/80
+        self.assertAlmostEqual(table["Weight"].sum(), 100, places=0)
+        self.assertAlmostEqual(table["Points"].sum(), 41.7, delta=0.3)
+
+    def test_a_notice_explains_the_redistribution(self):
+        at = choose_property(start_app(), "P03")
+        notices = [n.value for n in at.info]
+        self.assertEqual(len(notices), 1)
+        self.assertIn("Not measured: Social engagement (weight 20)", notices[0])
+        self.assertIn("shared across the other factors in proportion to their weights", notices[0])
+        self.assertIn("measured evidence only", notices[0])
+        self.assertIn("still out of 100", notices[0])
+
+    def test_no_notice_and_no_extra_column_when_everything_is_measured(self):
+        at = start_app()  # Queen's
+        self.assertEqual(len(at.info), 0)
+        self.assertNotIn("Weight set", self.breakdown(at).columns)
+
+    def test_the_redistribution_follows_the_sliders(self):
+        at = choose_property(start_app(), "P03")
+        at.sidebar.slider[FACTORS.index("audience")].set_value(60).run()
+        table = self.breakdown(at)
+        self.assertAlmostEqual(table["Weight"].sum(), 100, places=0)
+        self.assertEqual(table.loc["Social engagement", "Weight"], 0)
+        self.assertGreater(table.loc["Audience size", "Weight"], 31.2)  # the heavier slider counts for more
+
+    def test_the_ranking_still_shows_a_score_out_of_100_for_a_property_with_an_unmeasured_factor(self):
+        at = start_app()
+        for score in ranking_scores(at):
+            self.assertTrue(0 <= score <= 100)
+        roehampton = clean_name(next(p for p in load_properties() if p["id"] == "P03")["name"])
+        self.assertIn(roehampton, ranking_names(at))
 
     def test_the_audience_figure_is_described_by_property_type(self):
         self.assertEqual(self.breakdown(start_app()).loc["Audience size", "Figure"], "1.8 million people")
@@ -208,7 +265,26 @@ class ConfidenceDisplayTests(unittest.TestCase):
             ["Audience size", "Social engagement", "Purchasing power", "Broadcast exposure", "Prestige",
              "Audience age profile (used in matching)"],
         )
-        self.assertIn("LTA 2025 figures", sources.iloc[0]["Source"])
+        self.assertIn("LTA, 2025", sources.iloc[0]["Source"])
+        self.assertTrue(sources.iloc[0]["Link"] is None or pandas_isna(sources.iloc[0]["Link"]))  # no link for Queen's yet
+
+    def test_source_links_are_shown_where_recorded(self):
+        ilkley = choose_property(start_app(), "P02").dataframe[2].value
+        self.assertEqual(
+            ilkley.iloc[0]["Link"],
+            "https://www.lta.org.uk/49c743/siteassets/events/ilkley/media/2025-lexus-ilkley-open-programme.pdf",
+        )
+        roehampton = choose_property(start_app(), "P03").dataframe[2].value
+        self.assertEqual(
+            roehampton.iloc[0]["Link"],
+            "https://www.itftennis.com/en/tournament/j300-roehampton/gbr/2026/j-j300-gbr-2026-001/",
+        )
+
+    def test_the_caption_explains_why_engagement_is_scored_per_post(self):
+        captions = " ".join(c.value for c in start_app().caption)
+        self.assertIn("scored on engagements per post, not on the rate", captions)
+        self.assertIn("flatters small accounts", captions)
+        self.assertIn("Not measured", captions)
 
     def test_the_unresearched_age_profile_is_flagged_next_to_the_matches(self):
         captions = [c.value for c in start_app().caption]

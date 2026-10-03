@@ -36,10 +36,16 @@ Model changes agreed for version 2:
   `BROADCAST_RUBRIC` in `scoring.py`.
 - **Audience definition:** events = attendance plus peak broadcast audience where published (each
   row's `audience_source` says what it counts); players = Instagram followers.
-- **Engagement method:** median (likes + comments) of the 10 most recent non-pinned posts, divided by
-  followers. Median because viral posts distort a mean.
-- **Engagement rule:** if the rate is blank ("not measurable") or the account has under 1,000
-  followers, the factor gets a neutral score of 5 and is flagged "low confidence".
+- **Engagement is scored as engagements per post** (`engagement_per_post`): the median of (likes + comments)
+  over the 10 most recent non-pinned posts, on a log scale from 10 (0/10) to 10,000 (10/10). Median because
+  viral posts distort a mean. The engagement RATE (median divided by followers) is kept in the data and shown
+  in the Analysis section as context only, because a rate flatters small accounts. Real medians: Queen's
+  2,025, Toby Samuel 878, Ilkley 89, Queen Mary 23.
+- **Unmeasurable factors are left out and their weight redistributed** proportionally across the measured
+  factors (this replaced the earlier "neutral score of 5" rule). The property is scored only on real evidence
+  and the total stays out of 100. Roehampton's engagement is the current example. An engagement account under
+  1,000 followers also counts as not measurable. The Analysis section labels the factor "Not measured", shows
+  the weight set and the weight used, and explains it in a notice.
 - **Audience log scale:** bounds changed from 1,000-20 million to 100-10 million, because the real data
   runs from 150 to 1.8 million and the old floor scored the 150-person club at exactly 0. New scores
   for the real audiences span about 0.4 to 8.5 out of 10.
@@ -52,8 +58,9 @@ Model changes agreed for version 2:
   confidence label next to each figure in the Analysis section; a collapsed "Data sources" panel; a
   note that the audience age profiles are estimates; the pitch's disclaimer now says the brand is an
   illustrative category and the pitch is not a real proposal.
-- **Not researched:** the audience age profiles. They are version 1 sample estimates, labelled
-  `estimate`, and brand matching depends on them. Researching them is the obvious next step.
+- **Not researched:** the audience age profiles. They are judgement estimates, labelled `estimate`, and brand
+  matching depends on them: Queen Mary mostly 18-24 (85%), Roehampton a mix of under-18 players and parents
+  aged 35-54 (45% and 42%), the other three carried over from version 1. Researching them is the obvious next step.
 - **Confidence labels chosen by Claude, not given in the brief:** broadcast tiers and prestige ratings are
   labelled `estimate` (a judgement against the rubric); the Queen's audience is `calculated` (a sum of
   two published figures); the Ilkley audience and the Toby Samuel follower count are `published`.
@@ -99,7 +106,7 @@ Five factors, each scored 0-10 on a defined scale, then weighted.
 | Factor | Default weight | How it is scored |
 |---|---|---|
 | Audience size | 25 | Log scale, so small and large properties both get meaningful scores |
-| Engagement | 20 | Engagement rate mapped linearly to 0-10; neutral 5 if not measurable |
+| Engagement | 20 | Engagements per post on a log scale; left out (weight shared) if not measurable |
 | Demographics | 20 | Purchasing power only: share of the audience in higher-income brackets |
 | Broadcast exposure | 20 | The broadcast tier (0-10, from the rubric) |
 | Prestige | 15 | Your own 1-10 rating in the CSV |
@@ -109,8 +116,9 @@ published (each row's `audience_source` says what it counts); for players, Insta
 (`annual_audience_reach` in `properties.csv`).
 
 Scales (0 earns 0/10, the ceiling earns 10/10; set at the top of `scoring.py`):
-audience 100 to 10,000,000 (log); engagement 0% to 8% (straight line); higher-income share
+audience 100 to 10,000,000 (log); engagements per post 10 to 10,000 (log); higher-income share
 0% to 50% (straight line); broadcast tier and prestige are 0-10 ratings used as they stand.
+A blank figure means the factor is not measured: it is left out and its weight is shared across the others.
 
 - Prestige is weighted lower because it overlaps with audience and broadcast exposure.
 - Demographics does NOT include age. Age fit is handled in brand matching via
@@ -211,7 +219,7 @@ which brand the pitch is written for.
    banner always visible. Streamlit is installed in a private `.venv` folder inside the project.
    Run it with: `.venv/bin/streamlit run app.py` (from the `sponsorship_scout` folder).
 7. Final review: (done) all 5 properties run end to end through scoring, matching, pitch and
-   the app; the junior event excludes the age-restricted brand; 182 automated tests pass (after version 2)
+   the app; the junior event excludes the age-restricted brand; 226 automated tests pass (after the version 2 review changes)
    (23 of them drive the app and need Streamlit); README written.
 
 ## Changes agreed after the first plan
@@ -273,6 +281,12 @@ which brand the pitch is written for.
     engagement with a neutral score when it cannot be trusted, per-figure sources and confidence
     labels, a new banner, and category-fit financial_services for premium_tournament 8 to 9. See
     "Version 2" near the top of this file.
+
+20. Version 2 review changes: engagement scored per post on a log scale (rate shown as context);
+    unmeasurable factors have their weight redistributed instead of getting a neutral score; the pitch
+    prefixes estimated figures with "about" or "An estimated"; age profiles adjusted by judgement for
+    Queen Mary and Roehampton (still flagged as estimates); the Ilkley description updated; source links
+    added for Ilkley and Roehampton (Queen's stays "LTA, 2025" with no link).
 
 ## Open items
 

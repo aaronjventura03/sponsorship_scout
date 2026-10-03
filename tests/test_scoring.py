@@ -22,7 +22,7 @@ def make_property(audience, engagement, income, broadcast_tier, prestige, **extr
     """Build a fake property with just the fields scoring needs."""
     prop = {
         "annual_audience_reach": audience,
-        "engagement_rate_pct": engagement,
+        "engagement_per_post": engagement,  # median engagements (likes + comments) per post
         "high_income_share_pct": income,
         "broadcast_tier": broadcast_tier,
         "prestige_rating": prestige,
@@ -34,7 +34,7 @@ def make_property(audience, engagement, income, broadcast_tier, prestige, **extr
 # A property that hits the top of every scale, and one that hits the bottom.
 BEST = make_property(
     scoring.AUDIENCE_CEILING,
-    scoring.ENGAGEMENT_CEILING_PCT,
+    scoring.ENGAGEMENT_CEILING,
     scoring.HIGH_INCOME_CEILING_PCT,
     10,
     10,
@@ -102,7 +102,7 @@ class ScoreTests(unittest.TestCase):
         self.assertAlmostEqual(points, result["total"])
 
     def test_changing_weights_changes_score_but_stays_out_of_100(self):
-        prop = make_property(500_000, 8, 10, 3, 3)
+        prop = make_property(500_000, 5_000, 10, 3, 3)
         engagement_heavy = {"audience": 1, "engagement": 90, "demographics": 3, "media": 3, "prestige": 3}
         default_total = scoring.score_property(prop)["total"]
         heavy_total = scoring.score_property(prop, engagement_heavy)["total"]
@@ -112,9 +112,9 @@ class ScoreTests(unittest.TestCase):
         self.assertAlmostEqual(sum(weights_used), 100)
 
     def test_ranking_is_best_first(self):
-        small = make_property(10_000, 2, 10, 1, 2)
-        medium = make_property(500_000, 4, 25, 5, 5)
-        large = make_property(10_000_000, 4, 40, 9, 9)
+        small = make_property(10_000, 20, 10, 1, 2)
+        medium = make_property(500_000, 200, 25, 5, 5)
+        large = make_property(10_000_000, 2_000, 40, 9, 9)
         ranked = scoring.rank_properties([small, large, medium])
         self.assertEqual([pair[0] for pair in ranked], [large, medium, small])
 
@@ -152,44 +152,159 @@ class BroadcastTests(unittest.TestCase):
             self.assertTrue(scoring.broadcast_description(tier))
 
 
-class EngagementRuleTests(unittest.TestCase):
-    def engagement_score(self, rate, followers):
-        prop = make_property(1000, rate, 30, 5, 5, engagement_followers=followers)
-        return scoring.factor_scores(prop)["engagement"]
+class EngagementScaleTests(unittest.TestCase):
+    """Engagement is scored as engagements per post on a log scale, not as a rate."""
 
-    def test_a_measurable_rate_is_scored_normally(self):
-        self.assertEqual(self.engagement_score(4, 5_000), 5)  # 4% of the 8% ceiling
+    def score(self, per_post, **extra):
+        return scoring.factor_scores(make_property(1000, per_post, 30, 5, 5, **extra))["engagement"]
 
-    def test_a_blank_rate_gets_the_neutral_score(self):
-        self.assertEqual(self.engagement_score("", ""), scoring.ENGAGEMENT_NEUTRAL_SCORE)
-        self.assertEqual(scoring.ENGAGEMENT_NEUTRAL_SCORE, 5)
+    def test_the_bounds_are_10_and_10000(self):
+        self.assertEqual(scoring.ENGAGEMENT_FLOOR, 10)
+        self.assertEqual(scoring.ENGAGEMENT_CEILING, 10_000)
 
-    def test_an_account_under_1000_followers_gets_the_neutral_score(self):
-        self.assertEqual(self.engagement_score(9, 999), scoring.ENGAGEMENT_NEUTRAL_SCORE)
+    def test_ends_of_the_scale(self):
+        self.assertEqual(self.score(10), 0)
+        self.assertAlmostEqual(self.score(10_000), 10)
+        self.assertEqual(self.score(50_000), 10)  # capped
+
+    def test_real_values_are_spread_across_the_scale_in_order(self):
+        # The real medians: Queen Mary 23, Ilkley 89, Toby Samuel 878, Queen's 2,025.
+        scores = [self.score(value) for value in (23, 89, 878, 2_025)]
+        self.assertEqual(scores, sorted(scores))
+        self.assertTrue(all(b - a > 1 for a, b in zip(scores, scores[1:])), scores)
+        self.assertAlmostEqual(scores[0], 1.2, places=1)
+        self.assertAlmostEqual(scores[3], 7.7, places=1)
+
+    def test_a_big_account_beats_a_small_one_even_when_the_small_ones_rate_is_higher(self):
+        # Queen's: 2,025 per post but a 2.9% rate. Toby Samuel: 878 per post but a 13.8% rate.
+        queens = self.score(2_025, engagement_rate_pct=2.9, engagement_followers=70_100)
+        toby = self.score(878, engagement_rate_pct=13.8, engagement_followers=6_369)
+        self.assertGreater(queens, toby)
+
+    def test_the_rate_does_not_change_the_score(self):
+        low_rate = self.score(878, engagement_rate_pct=0.1)
+        high_rate = self.score(878, engagement_rate_pct=99)
+        self.assertEqual(low_rate, high_rate)
+
+
+class EngagementMeasurableTests(unittest.TestCase):
+    def measurable(self, per_post, followers):
+        prop = make_property(1000, per_post, 30, 5, 5, engagement_followers=followers)
+        return scoring.engagement_is_measurable(prop)
+
+    def test_a_normal_account_is_measurable(self):
+        self.assertTrue(self.measurable(878, 6_369))
+
+    def test_a_blank_figure_is_not_measurable(self):
+        self.assertFalse(self.measurable("", ""))
+
+    def test_an_account_under_1000_followers_is_not_measurable(self):
+        self.assertFalse(self.measurable(500, 999))
 
     def test_exactly_1000_followers_is_trusted(self):
-        self.assertEqual(self.engagement_score(4, 1_000), 5)
+        self.assertTrue(self.measurable(500, 1_000))
         self.assertEqual(scoring.ENGAGEMENT_MIN_FOLLOWERS, 1_000)
 
+    def test_zero_engagements_on_a_big_account_is_measured_not_missing(self):
+        self.assertTrue(self.measurable(0, 5_000))
+
     def test_a_missing_follower_count_is_not_held_against_the_property(self):
-        prop = make_property(1000, 4, 30, 5, 5)  # no engagement_followers field at all
-        self.assertTrue(scoring.engagement_is_measurable(prop))
+        self.assertTrue(scoring.engagement_is_measurable(make_property(1000, 400, 30, 5, 5)))
 
-    def test_the_neutral_score_is_flagged_as_low_confidence(self):
-        unmeasurable = make_property(1000, "", 30, 5, 5, engagement_followers="", engagement_confidence="estimate")
-        result = scoring.score_property(unmeasurable)["factors"]["engagement"]
-        self.assertEqual(result["score"], 5)
-        self.assertIn("low confidence", result["confidence"])
+    def test_there_is_no_neutral_score_any_more(self):
+        self.assertFalse(hasattr(scoring, "ENGAGEMENT_NEUTRAL_SCORE"))
+        unmeasured = scoring.factor_scores(make_property(1000, "", 30, 5, 5))
+        self.assertIsNone(unmeasured["engagement"])  # left out, not given a middle score
 
-    def test_a_measured_rate_keeps_its_confidence_label(self):
-        measured = make_property(1000, 3, 30, 5, 5, engagement_followers=5_000, engagement_confidence="calculated")
-        self.assertEqual(scoring.score_property(measured)["factors"]["engagement"]["confidence"], "calculated")
+
+class RedistributionTests(unittest.TestCase):
+    """A factor that cannot be measured is left out and its weight shared across the rest."""
+
+    def unmeasured_engagement(self, **extra):
+        return make_property(100_000, "", 30, 5, 5, **extra)
+
+    def test_the_unmeasured_weight_is_shared_in_proportion(self):
+        factors = scoring.score_property(self.unmeasured_engagement())["factors"]
+        # Default weights 25/20/20/20/15 with engagement (20) removed: the other 80 scale up by 100/80.
+        self.assertAlmostEqual(factors["audience"]["weight"], 25 * 100 / 80)
+        self.assertAlmostEqual(factors["demographics"]["weight"], 20 * 100 / 80)
+        self.assertAlmostEqual(factors["media"]["weight"], 20 * 100 / 80)
+        self.assertAlmostEqual(factors["prestige"]["weight"], 15 * 100 / 80)
+        self.assertEqual(factors["engagement"]["weight"], 0)
+
+    def test_the_weights_used_still_total_100(self):
+        factors = scoring.score_property(self.unmeasured_engagement())["factors"]
+        self.assertAlmostEqual(sum(item["weight"] for item in factors.values()), 100)
+
+    def test_the_weight_you_set_is_still_reported(self):
+        factors = scoring.score_property(self.unmeasured_engagement())["factors"]
+        self.assertEqual(factors["engagement"]["set_weight"], 20)
+        self.assertEqual(factors["audience"]["set_weight"], 25)
+
+    def test_an_unmeasured_factor_has_no_score_no_points_and_is_labelled(self):
+        item = scoring.score_property(self.unmeasured_engagement())["factors"]["engagement"]
+        self.assertIsNone(item["score"])
+        self.assertEqual(item["points"], 0)
+        self.assertFalse(item["measured"])
+        self.assertEqual(item["confidence"], "not measured")
+
+    def test_the_result_lists_what_was_left_out(self):
+        self.assertEqual(scoring.score_property(self.unmeasured_engagement())["unmeasured"], ["engagement"])
+        self.assertEqual(scoring.score_property(make_property(1000, 500, 30, 5, 5))["unmeasured"], [])
+
+    def test_the_score_uses_only_measured_evidence_and_is_still_out_of_100(self):
+        perfect_except_engagement = make_property(scoring.AUDIENCE_CEILING, "", scoring.HIGH_INCOME_CEILING_PCT, 10, 10)
+        self.assertAlmostEqual(scoring.score_property(perfect_except_engagement)["total"], 100)
+
+    def test_it_equals_scoring_with_that_factors_weight_set_to_zero(self):
+        prop = self.unmeasured_engagement()
+        without_engagement = {"audience": 25, "engagement": 0, "demographics": 20, "media": 20, "prestige": 15}
+        self.assertAlmostEqual(scoring.score_property(prop)["total"], scoring.score_property(prop, without_engagement)["total"])
+
+    def test_breakdown_points_add_up_to_the_total(self):
+        result = scoring.score_property(self.unmeasured_engagement())
+        self.assertAlmostEqual(sum(item["points"] for item in result["factors"].values()), result["total"])
+
+    def test_it_respects_changed_slider_weights(self):
+        weights = {"audience": 60, "engagement": 20, "demographics": 10, "media": 5, "prestige": 5}
+        factors = scoring.score_property(self.unmeasured_engagement(), weights)["factors"]
+        self.assertAlmostEqual(factors["audience"]["weight"], 60 * 100 / 80)
+        self.assertAlmostEqual(factors["prestige"]["weight"], 5 * 100 / 80)
+        self.assertAlmostEqual(sum(item["weight"] for item in factors.values()), 100)
+
+    def test_when_the_measured_factors_have_no_weight_the_defaults_are_used(self):
+        only_engagement = {"audience": 0, "engagement": 100, "demographics": 0, "media": 0, "prestige": 0}
+        result = scoring.score_property(self.unmeasured_engagement(), only_engagement)
+        self.assertAlmostEqual(sum(item["weight"] for item in result["factors"].values()), 100)
+        self.assertGreater(result["total"], 0)
+
+    def test_nothing_measured_scores_zero_without_crashing(self):
+        empty = {"annual_audience_reach": "", "engagement_per_post": "", "high_income_share_pct": "",
+                 "broadcast_tier": "", "prestige_rating": ""}
+        self.assertEqual(scoring.score_property(empty)["total"], 0)
+
+    def test_any_blank_factor_is_treated_the_same_way(self):
+        prop = make_property(100_000, 500, 30, "", 5)  # no broadcast tier
+        result = scoring.score_property(prop)
+        self.assertEqual(result["unmeasured"], ["media"])
+        self.assertAlmostEqual(sum(item["weight"] for item in result["factors"].values()), 100)
+
+    def test_ranking_still_works_with_an_unmeasured_factor(self):
+        good = make_property(5_000_000, 3_000, 40, 9, 9)
+        unmeasured = make_property(5_000, "", 20, 2, 3)
+        ranked = scoring.rank_properties([unmeasured, good])
+        self.assertEqual([pair[0] for pair in ranked], [good, unmeasured])
+        self.assertTrue(all(0 <= pair[1]["total"] <= 100 for pair in ranked))
+
+    def test_redistribute_weights_directly(self):
+        result = scoring.redistribute_weights({"a": 40, "b": 40, "c": 20}, ["a", "b"])
+        self.assertEqual(result, {"a": 50, "b": 50, "c": 0})
 
 
 class ConfidenceTests(unittest.TestCase):
     def test_every_factor_reports_the_confidence_from_the_data(self):
         prop = make_property(
-            1000, 3, 30, 5, 5,
+            1000, 500, 30, 5, 5,
             engagement_followers=5_000,
             audience_confidence="published",
             engagement_confidence="calculated",
@@ -203,8 +318,9 @@ class ConfidenceTests(unittest.TestCase):
             {"audience": "published", "engagement": "calculated", "demographics": "estimate", "media": "estimate", "prestige": "estimate"},
         )
 
-    def test_every_factor_has_a_confidence_column(self):
+    def test_every_factor_has_a_confidence_column_and_an_input_column(self):
         self.assertEqual(set(scoring.CONFIDENCE_COLUMN), set(scoring.FACTOR_LABELS))
+        self.assertEqual(set(scoring.INPUT_COLUMN), set(scoring.FACTOR_LABELS))
 
 
 class AudienceScaleTests(unittest.TestCase):

@@ -91,6 +91,26 @@ def in_words(number):
     return f"{number:,}"
 
 
+def _is_estimate(prop, figure):
+    """Is this figure an estimate (rather than published or calculated)?
+    `figure` is the start of its column name, such as "audience" or "high_income"."""
+    return prop.get(f"{figure}_confidence") == "estimate"
+
+
+def _approximately(prop, figure, text):
+    """Put "about" in front of a figure that is only an estimate, so the pitch
+    never presents a guess as a fact: "3,000" becomes "about 3,000"."""
+    return f"about {text}" if _is_estimate(prop, figure) else text
+
+
+def _engagement_is_strong(prop):
+    """Could engagement be measured, and is the engagement RATE a strength worth
+    mentioning to a brand? (The rate is what a brand understands; the app scores
+    engagements per post.)"""
+    rate = prop.get("engagement_rate_pct")
+    return engagement_is_measurable(prop) and isinstance(rate, (int, float)) and rate >= ENGAGEMENT_MIN_PCT
+
+
 def _band_label(part):
     """The age band's name, for example "35–54" (with a proper dash)."""
     for band_part, label in AGE_BANDS:
@@ -149,7 +169,7 @@ def _benefits(prop, match):
     candidates = [_audience_benefit(prop, brand, noun)]
 
     # 2. Engagement: only when it could be measured and is a strength.
-    if engagement_is_measurable(prop) and prop["engagement_rate_pct"] >= ENGAGEMENT_MIN_PCT:
+    if _engagement_is_strong(prop):
         candidates.append("A highly engaged following, well above typical engagement rates.")
 
     # 3. Category: is this a natural setting for the brand's kind of business?
@@ -165,18 +185,18 @@ def _benefits(prop, match):
     elif fit >= CATEGORY_GOOD_FIT:
         candidates.append(good_wording.format(subject=subject, label=match["category_label"]))
 
-    # 4. Purchasing power.
+    # 4. Purchasing power. An estimated share is introduced as "An estimated ...".
     if prop["high_income_share_pct"] >= PURCHASING_POWER_MIN_PCT:
-        candidates.append(
-            f"{prop['high_income_share_pct']}% of the audience is in higher-income brackets, "
-            f"giving you a customer base with strong purchasing power."
-        )
+        opening = "An estimated" if _is_estimate(prop, "high_income") else ""
+        share = f"{prop['high_income_share_pct']}% of the audience is in higher-income brackets"
+        sentence = f"{opening} {share}" if opening else share
+        candidates.append(f"{sentence}, giving you a customer base with strong purchasing power.")
 
     benefits = candidates[:3]
 
     # Always give at least two benefits: fall back to reach.
     if len(benefits) < 2:
-        reach = in_words(prop["annual_audience_reach"])
+        reach = _approximately(prop, "audience", in_words(prop["annual_audience_reach"]))
         if prop["property_type"] in FOLLOWER_TYPES:
             benefits.append(f"Your brand would reach {reach} followers.")
         else:
@@ -221,11 +241,12 @@ def generate_pitch(prop, match, activations, max_activations=MAX_ACTIVATIONS):
     lines.append("")
     # Only strengths are listed. The higher-income share is not repeated here
     # because it already appears in the "Why this brand" benefits.
+    audience = _approximately(prop, "audience", in_words(prop["annual_audience_reach"]))
     if prop["property_type"] in FOLLOWER_TYPES:
-        lines.append(f"- Instagram followers: {in_words(prop['annual_audience_reach'])}")
+        lines.append(f"- Instagram followers: {audience}")
     else:
-        lines.append(f"- Audience reach: {in_words(prop['annual_audience_reach'])} people")
-    if engagement_is_measurable(prop) and prop["engagement_rate_pct"] >= ENGAGEMENT_MIN_PCT:
+        lines.append(f"- Audience reach: {audience} people")
+    if _engagement_is_strong(prop):
         lines.append(f"- Social media engagement rate: {prop['engagement_rate_pct']}%")
     if prop["broadcast_tier"] >= BROADCAST_MIN_TIER:
         lines.append(f"- Broadcast coverage: {broadcast_description(prop['broadcast_tier'])}")

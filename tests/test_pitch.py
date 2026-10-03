@@ -40,6 +40,7 @@ def make_property(ages, high_income=42, **changes):
         "property_type": "premium_tournament",
         "description": "A test tournament",
         "annual_audience_reach": 12_000_000,
+        "engagement_per_post": 900,  # what the score uses; makes engagement "measurable"
         "engagement_rate_pct": 4.5,
         "high_income_share_pct": high_income,
         "broadcast_tier": 9,
@@ -233,10 +234,16 @@ class StatsTests(unittest.TestCase):
         self.assertNotIn("impressions", make_pitch().lower())
 
     def test_unmeasurable_engagement_is_never_shown_or_praised(self):
-        for rate, followers in (("", ""), (9.0, 500)):  # no account, and an account under 1,000 followers
-            text = make_pitch(prop=make_property(PROP_AGES, engagement_rate_pct=rate, engagement_followers=followers))
-            self.assertNotIn("engagement rate", text, (rate, followers))
-            self.assertNotIn("highly engaged", text, (rate, followers))
+        # No account at all, a blank per-post figure, and an account under 1,000 followers.
+        cases = [
+            {"engagement_per_post": "", "engagement_rate_pct": "", "engagement_followers": ""},
+            {"engagement_per_post": "", "engagement_rate_pct": 9.0},
+            {"engagement_rate_pct": 9.0, "engagement_followers": 500},
+        ]
+        for case in cases:
+            text = make_pitch(prop=make_property(PROP_AGES, **case))
+            self.assertNotIn("engagement rate", text, case)
+            self.assertNotIn("highly engaged", text, case)
 
 
 class BenefitTests(unittest.TestCase):
@@ -372,6 +379,75 @@ class CategoryWordingTests(unittest.TestCase):
     def test_every_sample_property_type_has_a_wording_style(self):
         for prop in load_properties():
             self.assertIn(prop["property_type"], pitch.CATEGORY_FIT_STYLE, prop["property_type"])
+
+
+class EstimateWordingTests(unittest.TestCase):
+    """Estimated figures must never read like facts: they get "about" or "An estimated"."""
+
+    def audience_line(self, confidence, **changes):
+        prop = make_property(PROP_AGES, audience_confidence=confidence, annual_audience_reach=3_000, **changes)
+        return section(make_pitch(prop=prop), "## The property")
+
+    def test_an_estimated_audience_is_prefixed_with_about(self):
+        self.assertIn("Audience reach: about 3,000 people", self.audience_line("estimate"))
+
+    def test_published_and_calculated_audiences_are_not_prefixed(self):
+        for confidence in ("published", "calculated"):
+            stats = self.audience_line(confidence)
+            self.assertIn("Audience reach: 3,000 people", stats, confidence)
+            self.assertNotIn("about", stats, confidence)
+
+    def test_a_property_with_no_confidence_label_is_not_prefixed(self):
+        self.assertIn("Audience reach: 12 million people", section(make_pitch(), "## The property"))
+
+    def test_an_estimated_income_share_is_introduced_as_an_estimate(self):
+        prop = make_property(PROP_AGES, engagement_rate_pct=1, high_income_confidence="estimate")
+        bullets = "\n".join(bullets_under_why(make_pitch(prop=prop)))
+        self.assertIn("An estimated 42% of the audience is in higher-income brackets, giving you", bullets)
+
+    def test_a_published_income_share_is_not(self):
+        prop = make_property(PROP_AGES, engagement_rate_pct=1, high_income_confidence="published")
+        bullets = "\n".join(bullets_under_why(make_pitch(prop=prop)))
+        self.assertIn("- 42% of the audience is in higher-income brackets", bullets)
+        self.assertNotIn("estimated", bullets)
+
+    def test_the_reach_fallback_also_says_about_for_an_estimate(self):
+        prop = make_property(PROP_AGES, high_income=5, engagement_rate_pct=1, audience_confidence="estimate", annual_audience_reach=150)
+        weak = make_pitch(prop=prop, match=make_match(BRAND_AGES, fit=1))
+        self.assertIn("Your brand would reach about 150 people.", weak)
+
+    def test_a_players_published_follower_count_is_stated_plainly(self):
+        prop = make_property(PROP_AGES, property_type="player", annual_audience_reach=6_369, audience_confidence="published")
+        self.assertIn("Instagram followers: 6,369", section(make_pitch(prop=prop), "## The property"))
+
+    def test_engagement_rate_is_calculated_so_it_is_not_hedged(self):
+        prop = make_property(PROP_AGES, engagement_rate_pct=13.8, engagement_confidence="calculated")
+        self.assertIn("Social media engagement rate: 13.8%", section(make_pitch(prop=prop), "## The property"))
+
+
+class RealDataPitchTests(unittest.TestCase):
+    def pitch_for(self, property_id):
+        prop = next(p for p in load_properties() if p["id"] == property_id)
+        match = match_brands(prop, load_brands(), load_category_fit())["matches"][0]
+        return pitch.generate_pitch(prop, match, load_activations())
+
+    def test_estimated_audiences_say_about(self):
+        self.assertIn("Audience reach: about 3,000 people", self.pitch_for("P03"))  # Roehampton, an estimate
+        self.assertIn("Audience reach: about 150 people", self.pitch_for("P04"))    # Queen Mary, an estimate
+
+    def test_published_or_calculated_audiences_are_stated_plainly(self):
+        self.assertIn("Audience reach: 1.8 million people", self.pitch_for("P01"))  # a calculated sum
+        self.assertIn("Audience reach: 20,000 people", self.pitch_for("P02"))       # published attendance
+        self.assertIn("Instagram followers: 6,369", self.pitch_for("P05"))          # published follower count
+
+    def test_the_ilkley_description_is_the_agreed_one(self):
+        self.assertIn("ATP Challenger 125 and WTA 125 grass-court event in Ilkley, West Yorkshire.", self.pitch_for("P02"))
+
+    def test_every_estimated_income_share_in_a_pitch_is_flagged_as_an_estimate(self):
+        for property_id in ("P01", "P02", "P03", "P04", "P05"):
+            text = self.pitch_for(property_id)
+            if "higher-income" in text:
+                self.assertIn("An estimated", text, property_id)
 
 
 FAMILIES_BULLET = "The event reaches families: parents and young players together."

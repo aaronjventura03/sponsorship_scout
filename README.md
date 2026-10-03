@@ -12,7 +12,7 @@ player) and Sponsorship Scout will:
 > Every figure has a source and a confidence label (published, calculated or estimate), and the
 > app shows them. The **brands are illustrative categories**, not real companies, and the **pitches
 > are illustrative only**, not real proposals. The audience **age profiles** used in brand matching
-> are still unresearched estimates carried over from version 1.
+> are still unresearched, judgement-based estimates.
 
 Version 2 uses no web scraping and no paid services. The data lives in four CSV files that you
 can edit in Excel, Numbers or any text editor.
@@ -89,7 +89,8 @@ Each of the five figures has its own `_source`, `_source_url` and `_confidence` 
 | Figure | Column | How it is defined |
 |---|---|---|
 | Audience | `annual_audience_reach` | **Events:** attendance plus peak broadcast audience where published. Check `audience_source` for what each row counts (for example, Ilkley is attendance only because streaming is not published). **Players:** Instagram followers. |
-| Engagement | `engagement_rate_pct` | Median of (likes + comments) over the 10 most recent **non-pinned** posts, divided by followers (see below). Blank means "not measurable". |
+| Engagement | `engagement_per_post` | **The scored figure.** Median of (likes + comments) over the 10 most recent **non-pinned** Instagram posts. Blank means "not measurable". |
+| Engagement rate | `engagement_rate_pct` | The same median divided by followers. **Context only: it is shown but not scored** (see below). |
 | Purchasing power | `high_income_share_pct` | % of the audience in higher-income brackets. All current values are estimates. |
 | Broadcast | `broadcast_tier` | A 0 to 10 rating from the rubric below. |
 | Prestige | `prestige_rating` | Your own 1 to 10 judgement. |
@@ -102,15 +103,29 @@ Each of the five figures has its own `_source`, `_source_url` and `_confidence` 
   audience, or a median engagement rate).
 - **estimate**: a judgement. Treat it with care.
 
-**Why the median for engagement.** One viral post can have many times the normal likes and comments. A mean
-(average) would be dragged up by it and overstate how engaged the following normally is. The median is the
-middle value of the 10 posts, so one outlier cannot move it much. Pinned posts are skipped because they stay
-at the top for weeks and collect more attention than a normal post.
+**Why the median.** One viral post can have many times the normal likes and comments. A mean (average)
+would be dragged up by it and overstate how engaged the following normally is. The median is the middle
+value of the 10 posts, so one outlier cannot move it much. Pinned posts are skipped because they stay at
+the top for weeks and collect more attention than a normal post.
 
-**When engagement is not trusted.** If the rate is blank ("not measurable", for example an event with no
-dedicated account) or the account has **under 1,000 followers** (`engagement_followers`), the score is a
-**neutral middle score of 5 out of 10** and the app flags it as low confidence. A tiny account's rate is too
-noisy to reward or punish. Both numbers are constants at the top of `scoring.py`.
+**Why engagements per post, not the rate.** The score uses the number of engagements per post on a log scale,
+not the engagement rate (engagements divided by followers). A rate **flatters small accounts**: a few hundred
+loyal followers give a high percentage, while a big account with thousands of reactions per post looks
+"weaker" because its rate is diluted across a huge following. Engagements per post counts how many real people
+reacted. On the real data this matters: Toby Samuel has the highest rate (13.8%) but Queen's gets more than
+twice as many engagements per post (2,025 against 878), and Queen's now scores higher on engagement. The rate
+is still shown in the Analysis section as context. The scale runs from 10 engagements per post (0 out of 10)
+to 10,000 (10 out of 10), on a log scale.
+
+**When a figure cannot be measured.** If a figure is blank, it is left out of the score and its weight is
+**shared across the factors that could be measured, in proportion to their weights**. The property is then
+scored only on real evidence, and the total is still out of 100. For example, Roehampton has no dedicated
+social account, so its engagement (weight 20) is left out and the other four weights scale up by 100/80
+(audience 25 becomes 31.25, and so on). Nothing is made up: there is no "neutral" stand-in score. The
+Analysis section shows this clearly: the factor is labelled "Not measured", both the weight you set and the
+weight actually used are shown, and a notice explains what happened. An engagement account with **under 1,000
+followers** is also treated as not measurable, because a handful of reactions is too noisy to mean much
+(`ENGAGEMENT_MIN_FOLLOWERS` in `scoring.py`).
 
 ### The broadcast rubric
 
@@ -134,8 +149,9 @@ For a player, rate the coverage their typical matches get.
 ### Other things to know when editing
 
 - The five age columns (`age_*_pct` and `target_age_*_pct`) must each total 100. The property age profiles
-  have **not been researched**: they are version 1 sample estimates, labelled `estimate`, and brand matching
-  depends on them.
+  have **not been researched**: they are judgement-based estimates (Queen Mary mostly 18 to 24, Roehampton a mix of
+  under-18 players and parents aged 35 to 54, the rest carried over from version 1), labelled `estimate`, and brand
+  matching depends on them.
 - `audience_includes_minors` is `TRUE` for events with a youth audience. It switches on the youth rules below.
 - `suitable_for_minors` (in `brands.csv`) is `FALSE` only for age-restricted products (alcohol, gambling and
   similar). Brands that merely do not target children stay `TRUE`.
@@ -157,7 +173,7 @@ For a player, rate the coverage their typical matches get.
 | Factor | Default weight | How it is scored |
 |---|---|---|
 | Audience size | 25 | log scale, 100 (0) to 10 million (10) |
-| Social engagement | 20 | straight line, 0% (0) to 8% (10); neutral 5 if not measurable or under 1,000 followers |
+| Social engagement | 20 | log scale on engagements per post, 10 (0) to 10,000 (10); left out and its weight shared if not measurable |
 | Purchasing power | 20 | straight line, 0% (0) to 50% (10) of the audience in higher-income brackets |
 | Broadcast exposure | 20 | the broadcast tier (0 to 10) from the rubric |
 | Prestige | 15 | your own 1 to 10 rating |
@@ -192,8 +208,9 @@ illustrative category and the pitch is not a real proposal.
 - **Broadcast is a rated tier, not a count of impressions.** Impression counts are rarely published and are
   not comparable between a TV audience and a stream. A 0 to 10 tier with a written rubric is consistent and
   honest about being a judgement.
-- **Median engagement, and a neutral score when it cannot be trusted** (see above), so a tiny or missing
-  account is neither rewarded nor punished.
+- **Engagements per post, not the engagement rate,** so small accounts are not flattered (see above).
+- **Unmeasured factors are left out, not guessed.** Their weight is shared across the measured factors, so a
+  property is scored only on real evidence. A made-up neutral score would have counted as evidence it is not.
 - **Weights always total 100.** Sliders let you change what matters, but the weights are rescaled so the
   score never stops meaning "out of 100".
 - **Prestige counts least.** It overlaps with audience and broadcast exposure, so weighting it heavily would
@@ -209,7 +226,10 @@ illustrative category and the pitch is not a real proposal.
 
 - **Every figure carries a source and a confidence label,** and the app shows the label next to each figure.
   Estimates are never presented as published facts.
-- **Source links are left blank rather than guessed.**
+- **Source links are left blank rather than guessed.** Links are recorded for Ilkley (the tournament programme)
+  and Roehampton (the ITF tournament page); Queen's is cited as "LTA, 2025" with no link yet.
+- **The pitch never presents an estimate as a fact.** An estimated audience is written "about 3,000 people" and
+  an estimated income share "An estimated 40% of the audience is in higher-income brackets".
 - **Age profiles are flagged as unresearched** in the data and in the app, because brand matching depends on them.
 - **Players and events share one audience scale.** A player's audience is Instagram followers and an event's is
   attendance plus TV audience. They are different things, so comparing them directly is a simplification.
@@ -276,7 +296,9 @@ single line in `app.py` that calls `generate_pitch`. Scoring, matching and the d
 
 - Several figures are estimates (all the higher-income shares, the broadcast tiers, the prestige ratings, and
   the audiences of Roehampton and the university club). The confidence labels say which.
-- The audience age profiles are unresearched, so brand matching is only as good as those guesses.
+- Roehampton is scored on four factors, not five, because it has no social account to measure.
+- The audience age profiles are unresearched judgements, so brand matching is only as good as those guesses.
+  The pitch's statements about the audience's age mix rest on them too.
 - Brands are illustrative categories, so matches show which kind of brand fits, not which company.
 - Matching considers age and category only. It does not consider geography, budget or existing sponsor conflicts
   (Queen's real title sponsor is a bank, so a bank "match" for Queen's would conflict in reality).

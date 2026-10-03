@@ -176,9 +176,14 @@ if chosen["property_type"] in FOLLOWER_TYPES:
 else:
     audience_figure = f"{in_words(chosen['annual_audience_reach'])} people"
 if engagement_is_measurable(chosen):
-    engagement_figure = f"{chosen['engagement_rate_pct']}% engagement rate"
+    # Scored on engagements per post. The rate is shown as context only.
+    engagement_figure = f"{chosen['engagement_per_post']:,} per post (median likes + comments)"
+    if isinstance(chosen.get("engagement_rate_pct"), (int, float)):
+        engagement_figure += f" · rate {chosen['engagement_rate_pct']}% of {chosen['engagement_followers']:,} followers"
+elif isinstance(chosen.get("engagement_followers"), (int, float)):
+    engagement_figure = f"Account has only {chosen['engagement_followers']:,} followers: too small to measure"
 else:
-    engagement_figure = "Not measurable (neutral score of 5 used)"
+    engagement_figure = "Not measurable (no dedicated account)"
 raw_figures = {
     "audience": audience_figure,
     "engagement": engagement_figure,
@@ -186,29 +191,48 @@ raw_figures = {
     "media": f"Tier {chosen['broadcast_tier']}: {broadcast_description(chosen['broadcast_tier'])}",
     "prestige": f"{chosen['prestige_rating']} out of 10",
 }
+# If a factor could not be measured, say so clearly and explain what happened to its weight.
+if result["unmeasured"]:
+    left_out = ", ".join(
+        f"{FACTOR_LABELS[factor]} (weight {format_weight(result['factors'][factor]['set_weight'])})"
+        for factor in result["unmeasured"]
+    )
+    st.info(
+        f"**Not measured: {left_out}.** This could not be measured for "
+        f"{clean_name(chosen['name'])}, so its weight has been shared across the other factors in proportion "
+        "to their weights. The score reflects measured evidence only, and is still out of 100."
+    )
+
+rows = []
+for factor, item in result["factors"].items():
+    row = {
+        "Factor": FACTOR_LABELS[factor],
+        "Figure": raw_figures[factor],
+        "Confidence": item["confidence"].capitalize(),
+        "Score (0-10)": None if item["score"] is None else round(item["score"], 1),
+    }
+    if result["unmeasured"]:
+        row["Weight set"] = round(item["set_weight"], 1)  # what the sliders say
+    row["Weight"] = round(item["weight"], 1)  # what was actually used
+    row["Points"] = round(item["points"], 1)
+    rows.append(row)
+
 st.dataframe(
-    [
-        {
-            "Factor": FACTOR_LABELS[factor],
-            "Figure": raw_figures[factor],
-            "Confidence": item["confidence"].capitalize(),
-            "Score (0-10)": round(item["score"], 1),
-            "Weight": round(item["weight"], 1),
-            "Points": round(item["points"], 1),
-        }
-        for factor, item in result["factors"].items()
-    ],
+    rows,
     hide_index=True,
     width="stretch",
     column_config={
         "Score (0-10)": st.column_config.NumberColumn(format="%.1f"),
+        "Weight set": st.column_config.NumberColumn(format="%.1f"),
         "Weight": st.column_config.NumberColumn(format="%.1f"),
         "Points": st.column_config.NumberColumn(format="%.1f"),
     },
 )
 st.caption(
     "Confidence: **Published** = a published figure. **Calculated** = worked out from published figures or posts. "
-    "**Estimate** = a judgement, so treat it with care."
+    "**Estimate** = a judgement, so treat it with care. **Not measured** = could not be measured, so it is "
+    "left out of the score. Engagement is scored on engagements per post, not on the rate, "
+    "because a rate flatters small accounts."
 )
 
 # Where each figure came from. Collapsed by default to keep the page tidy.
@@ -220,15 +244,20 @@ with st.expander(f"Data sources (collected {chosen.get('date_collected', 'unknow
             "Figure": FACTOR_LABELS[factor],
             "Source": chosen.get(f"{prefix}_source", "") or "(none recorded)",
             "Confidence": result["factors"][factor]["confidence"].capitalize(),
-            "Link": chosen.get(f"{prefix}_source_url", "") or "-",
+            "Link": chosen.get(f"{prefix}_source_url", "") or None,
         })
     source_rows.append({
         "Figure": "Audience age profile (used in matching)",
         "Source": chosen.get("age_profile_source", "") or "(none recorded)",
         "Confidence": str(chosen.get("age_profile_confidence", "")).capitalize(),
-        "Link": "-",
+        "Link": None,
     })
-    st.dataframe(source_rows, hide_index=True, width="stretch")
+    st.dataframe(
+        source_rows,
+        hide_index=True,
+        width="stretch",
+        column_config={"Link": st.column_config.LinkColumn("Link")},
+    )
 
 # --- Brand matches ---------------------------------------------------------
 outcome = match_brands(chosen, brands, category_fit)

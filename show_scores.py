@@ -14,5 +14,8 @@ print("Each factor shows: score out of 10 -> points contributed\n")
 for rank, (prop, result) in enumerate(rank_properties(load_properties()), start=1):
     print(f"{rank}. {prop['name']} ({prop['property_type']})  TOTAL: {result['total']:.1f} / 100")
     for factor, item in result["factors"].items():
-        print(f"     {FACTOR_LABELS[factor]:<18} {item['score']:4.1f}/10 -> {item['points']:4.1f} of {item['weight']:.0f} points")
+        if item["measured"]:
+            print(f"     {FACTOR_LABELS[factor]:<18} {item['score']:4.1f}/10 -> {item['points']:4.1f} of {item['weight']:.1f} points")
+        else:
+            print(f"     {FACTOR_LABELS[factor]:<18} NOT MEASURED (its weight of {item['set_weight']:.0f} is shared across the other factors)")
     print()
