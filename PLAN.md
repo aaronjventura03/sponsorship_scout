@@ -223,7 +223,7 @@ which brand the pitch is written for.
    banner always visible. Streamlit is installed in a private `.venv` folder inside the project.
    Run it with: `.venv/bin/streamlit run app.py` (from the `sponsorship_scout` folder).
 7. Final review: (done) all 5 properties run end to end through scoring, matching, pitch and
-   the app; the junior event excludes the age-restricted brand; 422 automated tests pass (after version 3)
+   the app; the junior event excludes the age-restricted brand; 434 automated tests pass (after version 3)
    (23 of them drive the app and need Streamlit); README written.
 
 ## Changes agreed after the first plan
@@ -307,10 +307,10 @@ which brand the pitch is written for.
     engaged" bullet (rate at least 4% and at least 100 engagements per post), so a small account with a high
     rate no longer shows a flattering percentage. The line and the bullet always appear together.
 
-## Version 3: Wikipedia lookup
+## Version 3: Wikipedia lookup and a property-type filter
 
 Goal: score a tournament or player that is not in the data files, using only free public APIs (no key,
-no account, no payment).
+no account, no payment), and rank one property type at a time.
 
 What was built:
 
@@ -329,10 +329,10 @@ What was built:
   a page-view chart, the form, validation). Wikipedia is contacted only inside button callbacks, never on a
   plain re-run. A lookup is kept in the browser session only and is never written to the CSV files.
 - **App**: a lookup joins the property picker, the ranking (marked "(Wikipedia lookup)"), the analysis and the
-  pitch.
+  pitch. New "Rank one property type at a time" filter above the ranking table (ranks count within the type).
 - **Pitch**: copes with blank figures; an audience that is Wikipedia page views is described as "Online
   interest: N Wikipedia page views a year", never as people or followers.
-- **Tests**: grew from 250 to 422. None uses the internet: `tests/wiki_fixtures.py` holds stand-in Wikipedia
+- **Tests**: grew from 250 to 434. None uses the internet: `tests/wiki_fixtures.py` holds stand-in Wikipedia
   replies shaped like the real ones, and a guard fails any test that reaches for the real downloader.
 
 Decisions: page views are offered as the audience figure (ticked by default, easy to untick) because they

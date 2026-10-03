@@ -144,8 +144,25 @@ with st.sidebar:
 st.header("Property ranking")
 st.caption("Commercial value out of 100. The table updates as you move the sliders.")
 
-ranked = rank_properties(all_properties, weights)
-labels = rank_labels([result["total"] for _, result in ranked])
+# Rank one property type at a time, or all of them together.
+ALL_TYPES = "All types"
+type_options = [ALL_TYPES] + list(dict.fromkeys(p["property_type"] for p in all_properties))
+if st.session_state.get("type_filter") not in type_options:
+    st.session_state["type_filter"] = ALL_TYPES  # for example after a lookup is removed
+type_filter = st.selectbox(
+    "Rank one property type at a time",
+    type_options,
+    key="type_filter",
+    format_func=lambda option: option if option == ALL_TYPES else type_label(option),
+)
+
+ranked = [
+    pair for pair in rank_properties(all_properties, weights)
+    if type_filter == ALL_TYPES or pair[0]["property_type"] == type_filter
+]
+labels = rank_labels([result["total"] for _, result in ranked])  # ranks count within the chosen type
+if type_filter != ALL_TYPES:
+    st.caption(f"Showing {type_label(type_filter).lower()} properties only ({len(ranked)}). Ranks count within this type.")
 
 # The ranking shows only the headline numbers. The factor-by-factor breakdown
 # for the chosen property is in the Analysis section below.

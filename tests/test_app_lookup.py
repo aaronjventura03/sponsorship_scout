@@ -449,5 +449,102 @@ class RemovingLookupsTests(LookupTestCase):
         self.assertEqual(len(ranking(at)), 7)
 
 
+class TypeFilterTests(LookupTestCase):
+    def filter_to(self, at, kind):
+        at.selectbox(key="type_filter").select(kind).run()
+        return at
+
+    def test_the_filter_lists_all_types_then_each_type_present(self):
+        box = self.start().selectbox(key="type_filter")
+        self.assertEqual(box.options, ["All types", "Premium tournament", "Challenger tournament", "Junior event", "University team", "Player"])
+        self.assertEqual(box.value, "All types")
+
+    def test_all_types_shows_every_property(self):
+        self.assertEqual(len(ranking(self.start())), 5)
+
+    def test_each_type_shows_only_its_own_properties(self):
+        expected = {p["property_type"]: p["name"] for p in load_properties()}
+        for kind, name in expected.items():
+            table = ranking(self.filter_to(self.start(), kind))
+            self.assertEqual(list(table["Property"]), [name], kind)
+            self.assertEqual(list(table["Type"]), [kind.replace("_", " ").capitalize()], kind)
+
+    def test_ranks_count_within_the_chosen_type(self):
+        for kind in ("player", "junior_event", "university_team"):
+            self.assertEqual(list(ranking(self.filter_to(self.start(), kind))["Rank"]), ["1"], kind)
+
+    def test_a_caption_says_what_is_being_shown(self):
+        at = self.filter_to(self.start(), "player")
+        self.assertIn("Showing player properties only (1). Ranks count within this type.", [c.value for c in at.caption])
+        at = self.filter_to(at, "All types")
+        self.assertFalse(any("properties only" in c.value for c in at.caption))
+
+    def test_going_back_to_all_types_restores_the_full_ranking(self):
+        at = self.filter_to(self.start(), "player")
+        self.assertEqual(len(ranking(at)), 1)
+        self.assertEqual(len(ranking(self.filter_to(at, "All types"))), 5)
+
+    def test_the_filter_does_not_change_the_chosen_property_or_its_analysis(self):
+        at = self.filter_to(self.start(), "player")  # Queen's is chosen, and is not a player
+        self.assertEqual(at.sidebar.selectbox[0].value, "Queen's (HSBC Championships)")
+        self.assertTrue(any(m.value.startswith("**Queen's (HSBC Championships)**") for m in at.markdown))
+        self.assertEqual(len(at.exception), 0)
+
+    def test_the_filter_follows_the_sliders(self):
+        at = self.filter_to(self.start(), "premium_tournament")
+        at.sidebar.slider[0].set_value(100).run()
+        self.assertEqual(len(ranking(at)), 1)
+        self.assertEqual(len(at.exception), 0)
+
+    def test_a_lookup_joins_the_ranking_of_its_own_type_only(self):
+        at = self.submit(self.fill_in(self.flow()))  # a premium tournament
+        premium = ranking(self.filter_to(at, "premium_tournament"))
+        self.assertEqual(len(premium), 2)
+        self.assertIn(QUEENS_LABEL, list(premium["Property"]))
+        self.assertEqual(list(premium["Rank"]), ["1", "2"])
+        self.assertEqual(len(ranking(self.filter_to(at, "player"))), 1)  # unaffected
+
+    def test_a_lookup_of_a_new_type_still_appears_under_that_type(self):
+        at = self.flow("tiny club")
+        at.selectbox(key="wf_type|Tiny Club").select("university_team").run()
+        self.submit(at)
+        table = ranking(self.filter_to(at, "university_team"))
+        self.assertEqual(len(table), 2)
+        self.assertIn("Tiny Club (Wikipedia lookup)", list(table["Property"]))
+
+    def test_removing_the_only_lookup_of_a_type_does_not_leave_a_stale_filter(self):
+        # A scenario where the only property of a type is a lookup: the saved data has no player.
+        folder = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, folder)
+        for csv_file in (PROJECT / "data").glob("*.csv"):
+            shutil.copy(csv_file, folder)
+        path = Path(folder) / "properties.csv"
+        path.write_text("".join(line for line in path.read_text().splitlines(keepends=True) if not line.startswith("P05,")))
+        os.environ["SCOUT_DATA_DIR"] = folder
+        self.addCleanup(os.environ.pop, "SCOUT_DATA_DIR", None)
+
+        at = self.start()
+        self.assertNotIn("Player", at.selectbox(key="type_filter").options)
+        self.search(at, "toby samuel")
+        self.use_first_page(at)
+        self.submit(self.fill_in(at))
+        self.assertIn("Player", at.selectbox(key="type_filter").options)  # the lookup brings its type with it
+        self.filter_to(at, "player")
+        self.assertEqual(list(ranking(at)["Property"]), ["Toby Samuel (Wikipedia lookup)"])
+
+        button(at, "Remove my Wikipedia lookups").click()
+        at.run()  # the "player" filter no longer matches anything, and must not break the page
+        self.assertEqual(len(at.exception), 0)
+        self.assertEqual(at.selectbox(key="type_filter").value, "All types")
+        self.assertEqual(len(ranking(at)), 4)
+
+    def test_every_filter_choice_runs_without_errors_and_keeps_scores_in_range(self):
+        for kind in self.start().selectbox(key="type_filter").options[1:]:
+            raw = kind.lower().replace(" ", "_")
+            at = self.filter_to(self.start(), raw)
+            self.assertEqual(len(at.exception), 0, kind)
+            self.assertTrue(all(0 <= s <= 100 for s in ranking(at)["Score"]), kind)
+
+
 if __name__ == "__main__":
     unittest.main()

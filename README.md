@@ -7,7 +7,8 @@ player) and Sponsorship Scout will:
 2. **Match** it with the best-fit brands from a brand list, and explain why each one fits.
 3. **Draft a one-page partnership pitch**, written for the brand to read, that you can download.
 
-You can also **look up any tournament or player on Wikipedia** (free, no key) and score that too.
+You can also **look up any tournament or player on Wikipedia** (free, no key) and score that too, and
+**rank one property type at a time**.
 
 > **What is real and what is not (version 2).**
 > The five **properties are real**, with sourced or estimated figures collected on 2 October 2026.
@@ -64,7 +65,8 @@ research, update the `EXPECTED` table in `RealDataTests` to match.
 - **Look up on Wikipedia:** type a tournament or player name, fetch its Wikipedia details, and score it
   (see "Looking up a property on Wikipedia" below).
 - **Property ranking:** all properties ranked by score, with the chosen one tinted. It re-sorts
-  live as you move the sliders. Properties from
+  live as you move the sliders. The **"Rank one property type at a time"** filter shows
+  only premium tournaments, only players, and so on, with ranks counted within that type. Properties from
   a Wikipedia lookup appear in the ranking too, marked "(Wikipedia lookup)".
 - **Analysis:** the chosen property's score breakdown with a **confidence label next to each figure**,
   a collapsed "Data sources" panel, its top brand matches with reasons, and any brands removed by the
