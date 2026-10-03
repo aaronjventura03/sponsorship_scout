@@ -198,12 +198,19 @@ class EngagementMeasurableTests(unittest.TestCase):
     def test_a_blank_figure_is_not_measurable(self):
         self.assertFalse(self.measurable("", ""))
 
-    def test_an_account_under_1000_followers_is_not_measurable(self):
-        self.assertFalse(self.measurable(500, 999))
+    def test_there_is_no_minimum_account_size(self):
+        # Scoring engagements per post on a log scale already treats a small account honestly.
+        self.assertFalse(hasattr(scoring, "ENGAGEMENT_MIN_FOLLOWERS"))
+        for followers in (1, 50, 500, 999, 1_000):
+            self.assertTrue(self.measurable(60, followers), followers)
 
-    def test_exactly_1000_followers_is_trusted(self):
-        self.assertTrue(self.measurable(500, 1_000))
-        self.assertEqual(scoring.ENGAGEMENT_MIN_FOLLOWERS, 1_000)
+    def test_a_small_account_is_scored_on_what_it_gets_per_post(self):
+        small = scoring.factor_scores(make_property(1000, 60, 30, 5, 5, engagement_followers=300))["engagement"]
+        self.assertTrue(0 < small < 4, small)  # a modest score: not excluded, not flattered
+        same_posts_bigger_account = scoring.factor_scores(
+            make_property(1000, 60, 30, 5, 5, engagement_followers=300_000)
+        )["engagement"]
+        self.assertEqual(small, same_posts_bigger_account)  # follower count does not change the score
 
     def test_zero_engagements_on_a_big_account_is_measured_not_missing(self):
         self.assertTrue(self.measurable(0, 5_000))

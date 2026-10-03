@@ -96,11 +96,10 @@ ENGAGEMENT_CEILING = 10_000        # this many or more = 10 / 10
 # Purchasing power uses a simple straight-line scale from 0.
 HIGH_INCOME_CEILING_PCT = 50       # 50% or more of the audience in higher-income brackets = 10 / 10
 
-# Engagement is only trusted when the account has enough followers. An account under
-# this size is treated as NOT MEASURABLE, because a handful of reactions on a tiny
-# account is too noisy to mean much. (A property with no account at all is also not
-# measurable.)
-ENGAGEMENT_MIN_FOLLOWERS = 1_000
+# A property with no engagement figure at all (for example an event with no dedicated
+# social account) is NOT MEASURABLE for engagement. There is no minimum account size:
+# scoring engagements per post on a log scale already treats a small account honestly
+# (a few reactions per post earn a low score), so it needs no special rule.
 
 # ---------------------------------------------------------------------------
 # BROADCAST RUBRIC: how a property's broadcast_tier (0-10) is chosen.
@@ -158,16 +157,9 @@ def straight_line_scale(value, ceiling):
 # Which factors could be measured?
 # ---------------------------------------------------------------------------
 def engagement_is_measurable(prop):
-    """Is there a trustworthy engagement figure for this property?
-    No if engagements per post is blank (no account, or posts could not be
-    counted), or the account has fewer than ENGAGEMENT_MIN_FOLLOWERS followers.
-    A missing follower count is not held against it."""
-    if not _is_number(prop.get("engagement_per_post")):
-        return False
-    followers = prop.get("engagement_followers")
-    if _is_number(followers) and followers < ENGAGEMENT_MIN_FOLLOWERS:
-        return False
-    return True
+    """Is there an engagement figure for this property?
+    No if engagements per post is blank (no account, or the posts could not be counted)."""
+    return _is_number(prop.get("engagement_per_post"))
 
 
 def is_measured(prop, factor):

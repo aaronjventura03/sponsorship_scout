@@ -180,8 +180,6 @@ if engagement_is_measurable(chosen):
     engagement_figure = f"{chosen['engagement_per_post']:,} per post (median likes + comments)"
     if isinstance(chosen.get("engagement_rate_pct"), (int, float)):
         engagement_figure += f" · rate {chosen['engagement_rate_pct']}% of {chosen['engagement_followers']:,} followers"
-elif isinstance(chosen.get("engagement_followers"), (int, float)):
-    engagement_figure = f"Account has only {chosen['engagement_followers']:,} followers: too small to measure"
 else:
     engagement_figure = "Not measurable (no dedicated account)"
 raw_figures = {

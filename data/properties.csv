@@ -1,6 +1,6 @@
 # REAL PROPERTY DATA collected 2 October 2026. Each figure has its own source, source_url and confidence columns. Confidence is one of: published (taken straight from a published figure), calculated (worked out from published figures or posts), estimate (a judgement). source_url is left blank where no link was recorded. A figure that cannot be measured is left blank and its weight is redistributed across the measured factors.
 # annual_audience_reach = for events: attendance plus peak broadcast audience where published (see audience_source for what each row counts). For players: Instagram followers.
-# engagement_per_post = THE SCORED ENGAGEMENT FIGURE: median of (likes + comments) over the 10 most recent non-pinned Instagram posts. Median, not mean, because one viral post would distort a mean. Leave blank if not measurable. An account under 1000 followers (engagement_followers) is treated as not measurable too.
+# engagement_per_post = THE SCORED ENGAGEMENT FIGURE: median of (likes + comments) over the 10 most recent non-pinned Instagram posts. Median, not mean, because one viral post would distort a mean. Leave blank if not measurable (for example no dedicated account).
 # engagement_rate_pct = the same median divided by followers. Shown as context only, NOT scored, because a rate flatters small accounts.
 # high_income_share_pct = % of the audience in higher-income brackets (all current values are estimates).
 # broadcast_tier = 0 to 10 rating of broadcast coverage using the rubric in the README (live free-to-air TV high, streaming only mid, none low).

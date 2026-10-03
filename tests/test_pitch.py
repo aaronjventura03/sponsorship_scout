@@ -234,11 +234,10 @@ class StatsTests(unittest.TestCase):
         self.assertNotIn("impressions", make_pitch().lower())
 
     def test_unmeasurable_engagement_is_never_shown_or_praised(self):
-        # No account at all, a blank per-post figure, and an account under 1,000 followers.
+        # No account at all, and a blank per-post figure.
         cases = [
             {"engagement_per_post": "", "engagement_rate_pct": "", "engagement_followers": ""},
             {"engagement_per_post": "", "engagement_rate_pct": 9.0},
-            {"engagement_rate_pct": 9.0, "engagement_followers": 500},
         ]
         for case in cases:
             text = make_pitch(prop=make_property(PROP_AGES, **case))
@@ -450,7 +449,94 @@ class RealDataPitchTests(unittest.TestCase):
                 self.assertIn("An estimated", text, property_id)
 
 
+class SoftenedAgeClaimsTests(unittest.TestCase):
+    """Where the age profile is only an estimate, audience-age claims are worded as "likely"."""
+
+    def why_bullets(self, confidence, prop_ages=PROP_AGES, brand_ages=BRAND_AGES, **prop_changes):
+        prop = make_property(prop_ages, **prop_changes)
+        if confidence is not None:
+            prop["age_profile_confidence"] = confidence
+        return bullets_under_why(make_pitch(prop=prop, match=make_match(brand_ages)))[0]
+
+    # --- the core customers are the largest group ---
+    def test_largest_group_claim_is_softened_for_an_estimate(self):
+        self.assertEqual(
+            self.why_bullets("estimate"),
+            "- Your core customers, aged 35–54, are likely the tournament's largest audience group.",
+        )
+
+    def test_largest_group_claim_is_plain_when_published_or_calculated(self):
+        for confidence in ("published", "calculated", None):
+            self.assertEqual(
+                self.why_bullets(confidence),
+                "- Your core customers, aged 35–54, are the tournament's largest audience group.",
+                confidence,
+            )
+
+    # --- a significant part of the audience ---
+    def test_significant_part_claim(self):
+        ages, brand = [5, 10, 28, 40, 17], [0, 5, 60, 25, 10]
+        self.assertEqual(
+            self.why_bullets("estimate", ages, brand),
+            "- Your core customers, aged 25–34, are likely to make up a significant part of the tournament's audience.",
+        )
+        self.assertEqual(
+            self.why_bullets("calculated", ages, brand),
+            "- Your core customers, aged 25–34, make up a significant part of the tournament's audience.",
+        )
+
+    # --- access to a shared age group ---
+    def test_access_claim(self):
+        ages, brand = [2, 80, 10, 5, 3], [20, 20, 20, 30, 10]
+        soft = self.why_bullets("estimate", ages, brand, property_type="university_team")
+        plain = self.why_bullets("published", ages, brand, property_type="university_team")
+        self.assertEqual(soft, "- The team is likely to give you access to customers aged 18–24, one of your key age groups.")
+        self.assertEqual(plain, "- The team gives you access to customers aged 18–24, one of your key age groups.")
+
+    # --- families at youth events ---
+    def test_families_claim(self):
+        soft = self.why_bullets("estimate", [45, 4, 4, 42, 5], property_type="junior_event", audience_includes_minors=True)
+        plain = self.why_bullets("calculated", [45, 4, 4, 42, 5], property_type="junior_event", audience_includes_minors=True)
+        self.assertEqual(soft, f"- {SOFT_FAMILIES_BULLET}")
+        self.assertEqual(plain, f"- {FAMILIES_BULLET}")
+
+    # --- only the age claims are softened ---
+    def test_other_claims_are_not_hedged_by_the_age_profile(self):
+        prop = make_property(PROP_AGES, engagement_rate_pct=1, age_profile_confidence="estimate")
+        bullets = "\n".join(bullets_under_why(make_pitch(prop=prop)))
+        self.assertIn("The tournament is a natural home for luxury watch brands like yours.", bullets)
+        self.assertIn("42% of the audience is in higher-income brackets", bullets)
+
+    def test_the_hedge_depends_only_on_the_age_profile_not_the_other_figures(self):
+        prop = make_property(PROP_AGES, age_profile_confidence="calculated", audience_confidence="estimate")
+        self.assertIn("are the tournament's largest audience group", bullets_under_why(make_pitch(prop=prop))[0])
+
+    def test_under_18s_are_still_never_called_customers_when_softened(self):
+        text = self.why_bullets("estimate", [55, 5, 5, 30, 5], [60, 0, 5, 35, 0], property_type="junior_event", audience_includes_minors=True).lower()
+        for phrase in UNDER_18_PHRASES:
+            self.assertNotIn(phrase, text)
+
+
+class RealDataAgeClaimTests(unittest.TestCase):
+    def audience_bullet(self, property_id):
+        prop = next(p for p in load_properties() if p["id"] == property_id)
+        match = match_brands(prop, load_brands(), load_category_fit())["matches"][0]
+        text = pitch.generate_pitch(prop, match, load_activations())
+        return [line for line in section(text, "## Why ").splitlines() if line.startswith("- ")][0]
+
+    def test_every_real_pitch_hedges_its_age_claim_because_the_profiles_are_estimates(self):
+        for property_id in ("P01", "P02", "P03", "P04", "P05"):
+            self.assertIn("likely", self.audience_bullet(property_id), property_id)
+
+    def test_the_real_data_has_no_firm_age_profile_yet(self):
+        # This is why every pitch is hedged. When a profile is researched, update its confidence label
+        # and its pitch will state the claim plainly.
+        for prop in load_properties():
+            self.assertEqual(prop["age_profile_confidence"], "estimate", prop["id"])
+
+
 FAMILIES_BULLET = "The event reaches families: parents and young players together."
+SOFT_FAMILIES_BULLET = "The event is likely to reach families: parents and young players together."
 UNDER_18_PHRASES = ["customers aged under 18", "access to customers aged under 18", "under 18"]
 
 
@@ -514,7 +600,10 @@ class SampleDataTests(unittest.TestCase):
                 for phrase in UNDER_18_PHRASES:
                     self.assertNotIn(phrase, text, f"{name}: found '{phrase}'")
                 if prop["audience_includes_minors"]:
-                    self.assertIn(FAMILIES_BULLET.lower(), text, name)
+                    # Worded as "is likely to reach" while the age profile is an estimate.
+                    self.assertTrue(
+                        FAMILIES_BULLET.lower() in text or SOFT_FAMILIES_BULLET.lower() in text, name
+                    )
 
     def test_every_sample_property_produces_a_clean_pitch(self):
         brands, fit, activations = load_brands(), load_category_fit(), load_activations()

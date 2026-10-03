@@ -123,9 +123,9 @@ scored only on real evidence, and the total is still out of 100. For example, Ro
 social account, so its engagement (weight 20) is left out and the other four weights scale up by 100/80
 (audience 25 becomes 31.25, and so on). Nothing is made up: there is no "neutral" stand-in score. The
 Analysis section shows this clearly: the factor is labelled "Not measured", both the weight you set and the
-weight actually used are shown, and a notice explains what happened. An engagement account with **under 1,000
-followers** is also treated as not measurable, because a handful of reactions is too noisy to mean much
-(`ENGAGEMENT_MIN_FOLLOWERS` in `scoring.py`).
+weight actually used are shown, and a notice explains what happened. There is no minimum account size: a
+small account is not excluded, because scoring engagements per post on a log scale already treats it honestly
+(a few reactions per post earn a low score).
 
 ### The broadcast rubric
 
@@ -229,7 +229,10 @@ illustrative category and the pitch is not a real proposal.
 - **Source links are left blank rather than guessed.** Links are recorded for Ilkley (the tournament programme)
   and Roehampton (the ITF tournament page); Queen's is cited as "LTA, 2025" with no link yet.
 - **The pitch never presents an estimate as a fact.** An estimated audience is written "about 3,000 people" and
-  an estimated income share "An estimated 40% of the audience is in higher-income brackets".
+  an estimated income share "An estimated 40% of the audience is in higher-income brackets". Claims about the
+  audience's age mix are softened while the age profile is an estimate: "Your core customers, aged 35-54, are
+  *likely* the tournament's largest audience group", "is *likely to* reach families". Once an age profile is
+  researched and its confidence label changed to published or calculated, the claim is stated plainly.
 - **Age profiles are flagged as unresearched** in the data and in the app, because brand matching depends on them.
 - **Players and events share one audience scale.** A player's audience is Instagram followers and an event's is
   attendance plus TV audience. They are different things, so comparing them directly is a simplification.
@@ -298,7 +301,7 @@ single line in `app.py` that calls `generate_pitch`. Scoring, matching and the d
   the audiences of Roehampton and the university club). The confidence labels say which.
 - Roehampton is scored on four factors, not five, because it has no social account to measure.
 - The audience age profiles are unresearched judgements, so brand matching is only as good as those guesses.
-  The pitch's statements about the audience's age mix rest on them too.
+  The pitch words its age-mix claims as "likely" for that reason.
 - Brands are illustrative categories, so matches show which kind of brand fits, not which company.
 - Matching considers age and category only. It does not consider geography, budget or existing sponsor conflicts
   (Queen's real title sponsor is a bank, so a bank "match" for Queen's would conflict in reality).

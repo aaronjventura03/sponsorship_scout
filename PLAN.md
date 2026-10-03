@@ -43,9 +43,10 @@ Model changes agreed for version 2:
   2,025, Toby Samuel 878, Ilkley 89, Queen Mary 23.
 - **Unmeasurable factors are left out and their weight redistributed** proportionally across the measured
   factors (this replaced the earlier "neutral score of 5" rule). The property is scored only on real evidence
-  and the total stays out of 100. Roehampton's engagement is the current example. An engagement account under
-  1,000 followers also counts as not measurable. The Analysis section labels the factor "Not measured", shows
-  the weight set and the weight used, and explains it in a notice.
+  and the total stays out of 100. Roehampton's engagement is the current example. (An earlier "account under
+  1,000 followers is not measurable" rule was removed: engagements per post on a log scale already scores small
+  accounts honestly.) The Analysis section labels the factor "Not measured", shows the weight set and the
+  weight used, and explains it in a notice.
 - **Audience log scale:** bounds changed from 1,000-20 million to 100-10 million, because the real data
   runs from 150 to 1.8 million and the old floor scored the 150-person club at exactly 0. New scores
   for the real audiences span about 0.4 to 8.5 out of 10.
@@ -219,7 +220,7 @@ which brand the pitch is written for.
    banner always visible. Streamlit is installed in a private `.venv` folder inside the project.
    Run it with: `.venv/bin/streamlit run app.py` (from the `sponsorship_scout` folder).
 7. Final review: (done) all 5 properties run end to end through scoring, matching, pitch and
-   the app; the junior event excludes the age-restricted brand; 226 automated tests pass (after the version 2 review changes)
+   the app; the junior event excludes the age-restricted brand; 236 automated tests pass (after the final changes)
    (23 of them drive the app and need Streamlit); README written.
 
 ## Changes agreed after the first plan
@@ -287,6 +288,12 @@ which brand the pitch is written for.
     prefixes estimated figures with "about" or "An estimated"; age profiles adjusted by judgement for
     Queen Mary and Roehampton (still flagged as estimates); the Ilkley description updated; source links
     added for Ilkley and Roehampton (Queen's stays "LTA, 2025" with no link).
+
+21. Final changes: the "account under 1,000 followers" rule was removed (engagements per post on a log
+    scale already scores small accounts honestly), and the pitch now softens audience-age claims
+    ("are likely the tournament's largest audience group", "is likely to reach families") wherever a
+    property's age profile is an estimate. Published or calculated profiles are stated plainly. All five
+    properties currently have estimated profiles, so every pitch is hedged.
 
 ## Open items
 

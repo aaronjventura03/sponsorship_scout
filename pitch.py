@@ -135,12 +135,27 @@ def _activation_ideas(brand, activations, limit):
 # ---------------------------------------------------------------------------
 # "Why this brand": 2 to 3 benefits, written for the brand
 # ---------------------------------------------------------------------------
+def _age_profile_is_estimate(prop):
+    """Is the property's audience age profile only an estimate? (Properties with no
+    confidence label are treated as having a firm profile.)"""
+    return prop.get("age_profile_confidence") == "estimate"
+
+
 def _audience_benefit(prop, brand, noun):
-    """The first benefit: does the audience contain the brand's customers?"""
+    """The first benefit: does the audience contain the brand's customers?
+
+    These claims come from the property's audience age profile. Where that profile is
+    only an estimate, the wording is softened ("are likely the ... largest audience
+    group") so the pitch never states a guess as a fact."""
+    estimated = _age_profile_is_estimate(prop)
+    likely = " likely" if estimated else ""            # "are likely the largest ..."
+    likely_to = " likely to" if estimated else ""      # "is likely to give you ..."
+
     # Events with a youth audience: talk about families. Under-18s are never described
     # as the brand's customers, and the brand is never said to get "access to" them.
     if prop.get("audience_includes_minors"):
-        return f"The {noun} reaches families: parents and young players together."
+        verb = "is likely to reach" if estimated else "reaches"
+        return f"The {noun} {verb} families: parents and young players together."
 
     # Otherwise compare the adult age groups only, for the same reason.
     adult_bands = [part for part, _label in AGE_BANDS if part != "under18"]
@@ -150,13 +165,15 @@ def _audience_benefit(prop, brand, noun):
     core_label = _band_label(core)
 
     if property_share[core] == max(property_share.values()):
-        return f"Your core customers, aged {core_label}, are the {noun}'s largest audience group."
+        return f"Your core customers, aged {core_label}, are{likely} the {noun}'s largest audience group."
     if property_share[core] >= SIGNIFICANT_SHARE_PCT:
-        return f"Your core customers, aged {core_label}, make up a significant part of the {noun}'s audience."
+        verb = "are likely to make up" if estimated else "make up"
+        return f"Your core customers, aged {core_label}, {verb} a significant part of the {noun}'s audience."
     # The brand's core group is small here, so point to the age group they share most.
     shared = {part: min(property_share[part], brand_share[part]) for part in adult_bands}
     best = max(shared, key=shared.get)
-    return f"The {noun} gives you access to customers aged {_band_label(best)}, one of your key age groups."
+    verb = "is likely to give" if estimated else "gives"
+    return f"The {noun} {verb} you access to customers aged {_band_label(best)}, one of your key age groups."
 
 
 def _benefits(prop, match):
